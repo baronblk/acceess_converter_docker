@@ -7,7 +7,7 @@ import shutil
 import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import uuid
 
 from app.core.config import settings
@@ -209,3 +209,110 @@ def check_disk_space(required_mb: float, path: Path = None) -> bool:
     required_bytes = required_mb * 1024 * 1024
     
     return available_bytes >= required_bytes
+
+
+def validate_access_file(file_path: Path) -> Tuple[bool, Optional[str]]:
+    """
+    Validate if file is a valid Access database
+    Returns (is_valid, error_message)
+    """
+    if not file_path.exists():
+        return False, "File does not exist"
+    
+    if file_path.stat().st_size == 0:
+        return False, "File is empty"
+    
+    if file_path.stat().st_size > settings.max_upload_mb * 1024 * 1024:
+        return False, f"File too large (max: {settings.max_upload_mb}MB)"
+    
+    # Check file extension
+    if file_path.suffix.lower() not in settings.allowed_extensions:
+        return False, f"Invalid file type. Allowed: {settings.allowed_extensions}"
+    
+    # Basic file header validation for Access files
+    try:
+        with open(file_path, 'rb') as f:
+            header = f.read(16)
+            
+            # Check for Access file signatures
+            if len(header) >= 4:
+                # This is a basic check - UCanAccess will do the real validation
+                return True, None
+            else:
+                return False, "File appears to be corrupted (invalid header)"
+                
+    except Exception as e:
+        return False, f"Could not read file: {str(e)}"
+
+
+def create_export_directory(job_id: str) -> Path:
+    """Create export directory for a job"""
+    export_dir = Path(settings.export_path) / job_id
+    export_dir.mkdir(parents=True, exist_ok=True)
+    return export_dir
+
+
+class FileManager:
+    """File management utilities"""
+    
+    def __init__(self):
+        self.upload_dir = Path(settings.upload_path)
+        self.export_dir = Path(settings.export_path)
+        self.logs_dir = Path(settings.logs_path)
+        
+        # Ensure directories exist
+        for dir_path in [self.upload_dir, self.export_dir, self.logs_dir]:
+            dir_path.mkdir(parents=True, exist_ok=True)
+    
+    def save_uploaded_file(self, file_content: bytes, filename: str) -> Tuple[str, Path]:
+        """
+        Save uploaded file and return file_id and path
+        
+        Returns:
+            Tuple of (file_id, file_path)
+        """
+        file_id = generate_file_id()
+        safe_filename = sanitize_filename(filename)
+        
+        # Create unique filename to avoid conflicts
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_filename = f"{timestamp}_{safe_filename}"
+        
+        file_path = self.upload_dir / file_id / unique_filename
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            with open(file_path, 'wb') as f:
+                f.write(file_content)
+            
+            logger.info("File saved successfully", 
+                       file_id=file_id, 
+                       filename=safe_filename,
+                       size_mb=len(file_content) / (1024 * 1024))
+            
+            return file_id, file_path
+            
+        except Exception as e:
+            logger.error("Failed to save uploaded file", 
+                        file_id=file_id, 
+                        filename=safe_filename,
+                        error=str(e))
+            raise
+    
+    def get_file_path(self, file_id: str) -> Optional[Path]:
+        """Get file path by file_id"""
+        file_dir = self.upload_dir / file_id
+        
+        if not file_dir.exists():
+            return None
+        
+        # Find the first file in the directory
+        for file_path in file_dir.iterdir():
+            if file_path.is_file():
+                return file_path
+        
+        return None
+
+
+# Global file manager instance
+file_manager = FileManager()
