@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: access_converter_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: access_converter_backend
+    environment:
+      - APP_ENV=production
+      - REDIS_URL=redis://redis:6379/0
+      - MAX_UPLOAD_MB=200
+      - CLEANUP_AFTER_HOURS=24
+      - UCANACCESS_PATH=/opt/ucanaccess
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: access_converter_worker
+    command: ["python", "-m", "rq", "worker", "--url", "redis://redis:6379/0"]
+    environment:
+      - APP_ENV=production
+      - REDIS_URL=redis://redis:6379/0
+      - UCANACCESS_PATH=/opt/ucanaccess
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - redis
+      - backend
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: access_converter_frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  redis_data:
+
+networks:
+  default:
+    name: access_converter_network
