@@ -448,7 +448,14 @@ async def start_conversion(
         
         # Start background conversion
         asyncio.create_task(
-            _process_conversion(job_id, request.selected_tables, request.export_format)
+            _process_conversion(
+                job_id, 
+                request.selected_tables, 
+                request.export_format,
+                bool(request.create_pivot_tables),
+                bool(request.export_queries), 
+                bool(request.export_schema)
+            )
         )
         
         # Update job status
@@ -515,8 +522,11 @@ async def download_results(job_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def _process_conversion(job_id: str, selected_tables: List[str], export_format: str):
-    """Background task for processing conversion"""
+async def _process_conversion(job_id: str, selected_tables: List[str], export_format: str,
+                             create_pivot_tables: bool = False,
+                             export_queries: bool = False, 
+                             export_schema: bool = False):
+    """Background task for processing conversion with advanced options"""
     try:
         job = job_manager.get_job(job_id)
         if not job:
@@ -527,9 +537,18 @@ async def _process_conversion(job_id: str, selected_tables: List[str], export_fo
         normalized_path = normalize_file_path(job.file_path)
         data = await run_in_threadpool(access_service.get_table_data, normalized_path, selected_tables)
         
-        # Export data based on format
+        # Export data with advanced options
         job_manager.update_job_progress(job_id, 50, "Converting data...")
-        export_files = await export_service.export_data(data, export_format, job_id)
+        export_files = await export_service.export_data(
+            data, 
+            export_format, 
+            job_id,
+            create_pivot_tables=create_pivot_tables,
+            export_queries=export_queries,
+            export_schema=export_schema,
+            access_service=access_service,
+            access_file_path=normalized_path
+        )
         
         # Create ZIP file
         job_manager.update_job_progress(job_id, 80, "Creating archive...")

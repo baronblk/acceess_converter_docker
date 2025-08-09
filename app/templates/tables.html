@@ -140,6 +140,74 @@
           </template>
         </div>
 
+        <!-- Erweiterte Export-Optionen -->
+        <div class="card glass-card shadow-lg mb-8 overflow-visible">
+          <div class="card-body">
+            <h3 class="card-title text-lg mb-4">
+              <i class="fas fa-cogs text-emerald-500 mr-2"></i>
+              Erweiterte Export-Optionen
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <!-- Pivot-Tabellen Option -->
+              <div class="form-control">
+                <label class="label cursor-pointer">
+                  <span class="label-text">
+                    <i class="fas fa-chart-pie mr-2 text-blue-500"></i>
+                    <span class="font-medium">Pivot-Tabellen</span>
+                    <div class="text-sm text-gray-500 mt-1">
+                      Erstellt automatisch Pivot-Auswertungen in Excel
+                    </div>
+                  </span>
+                  <input type="checkbox" x-model="createPivotTables" 
+                         :disabled="selectedFormat !== 'xlsx'"
+                         class="checkbox checkbox-primary" />
+                </label>
+              </div>
+              
+              <!-- Query-Export Option -->
+              <div class="form-control">
+                <label class="label cursor-pointer">
+                  <span class="label-text">
+                    <i class="fas fa-search mr-2 text-purple-500"></i>
+                    <span class="font-medium">Abfragen exportieren</span>
+                    <div class="text-sm text-gray-500 mt-1">
+                      Exportiert gespeicherte Access-Abfragen und deren Ergebnisse
+                    </div>
+                  </span>
+                  <input type="checkbox" x-model="exportQueries" class="checkbox checkbox-primary" />
+                </label>
+              </div>
+              
+              <!-- Schema-Export Option -->
+              <div class="form-control">
+                <label class="label cursor-pointer">
+                  <span class="label-text">
+                    <i class="fas fa-project-diagram mr-2 text-orange-500"></i>
+                    <span class="font-medium">Schema exportieren</span>
+                    <div class="text-sm text-gray-500 mt-1">
+                      Erstellt Datenbankschema (JSON) und ER-Diagramm
+                    </div>
+                  </span>
+                  <input type="checkbox" x-model="exportSchema" class="checkbox checkbox-primary" />
+                </label>
+              </div>
+            </div>
+            
+            <!-- Hinweise -->
+            <div x-show="createPivotTables && selectedFormat !== 'xlsx'" class="alert alert-warning mt-4">
+              <i class="fas fa-exclamation-triangle"></i>
+              <span>Pivot-Tabellen sind nur bei Excel-Export verfügbar. Bitte wählen Sie XLSX als Format.</span>
+            </div>
+            
+            <div x-show="exportQueries || exportSchema" class="alert alert-info mt-4">
+              <i class="fas fa-info-circle"></i>
+              <span>
+                Erweiterte Optionen werden zusätzlich zu den Tabellendaten exportiert und im ZIP-Archiv bereitgestellt.
+              </span>
+            </div>
+          </div>
+        </div>
+
         <!-- Actions -->
         <div class="card glass-card shadow-lg overflow-visible">
           <div class="card-body">
@@ -215,6 +283,10 @@
         jobId, tables: [], selectedTables: [], selectedFormat: 'csv',
         loading: true, error: null, converting: false,
         showProgress: false, progress: 0, progressMessage: '', pollingInterval: null,
+        // Erweiterte Export-Optionen
+        createPivotTables: false,
+        exportQueries: false,
+        exportSchema: false,
 
         async init(){ await this.loadTables(); },
 
@@ -243,9 +315,18 @@
           this.converting = true;
           this.error = null;
           try{
+            const requestData = {
+              selected_tables: this.selectedTables,
+              export_format: this.selectedFormat,
+              create_pivot_tables: this.createPivotTables,
+              export_queries: this.exportQueries,
+              export_schema: this.exportSchema
+            };
+            console.log('Request data:', requestData);
+            
             const r = await fetch(`/convert/${this.jobId}`, {
               method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({ selected_tables:this.selectedTables, export_format:this.selectedFormat })
+              body: JSON.stringify(requestData)
             });
             console.log('Response status:', r.status);
             if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail || `HTTP ${r.status}`); }

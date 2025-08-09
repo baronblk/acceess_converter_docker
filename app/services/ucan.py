@@ -542,3 +542,211 @@ class AccessService:
     def diagnose_ucanaccess(self) -> Dict[str, Any]:
         """Run UCanAccess diagnostics"""
         return diagnose_ucanaccess()
+    
+    def get_queries(self, access_file_path: str) -> Dict[str, str]:
+        """
+        Extrahiert alle gespeicherten Abfragen (Queries) aus der Access-Datenbank
+        
+        Args:
+            access_file_path: Pfad zur Access-Datenbank
+            
+        Returns:
+            Dict mit Query-Name als Key und SQL-Definition als Value
+        """
+        queries = {}
+        conn = None
+        
+        try:
+            conn = connect(Path(access_file_path))
+            
+            # Abfragen aus MSysObjects und MSysQueries-Tabellen extrahieren
+            # Diese System-Tabellen enthalten die Query-Definitionen
+            query_sql = """
+            SELECT o.Name, q.SQL1
+            FROM MSysObjects o 
+            INNER JOIN MSysQueries q ON o.Id = q.ObjectId
+            WHERE o.Type = 5 AND o.Name NOT LIKE 'MSys*'
+            """
+            
+            df = pd.read_sql(query_sql, conn)
+            
+            for _, row in df.iterrows():
+                query_name = row['Name']
+                query_sql_def = row['SQL1'] if 'SQL1' in row else ''
+                queries[query_name] = query_sql_def
+                
+            logger.info(f"Gefunden: {len(queries)} Abfragen in {access_file_path}")
+            
+        except Exception as e:
+            logger.warning(f"Fehler beim Extrahieren der Abfragen: {e}")
+            # Fallback: Versuche über Metadaten
+            try:
+                cursor = conn.cursor()
+                # Alternative Methode über INFORMATION_SCHEMA (falls verfügbar)
+                cursor.execute("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.VIEWS")
+                views = cursor.fetchall()
+                for view in views:
+                    queries[view[0]] = f"-- Definition für View {view[0]} nicht verfügbar"
+            except:
+                pass
+                
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
+                    
+        return queries
+    
+    def execute_query(self, access_file_path: str, query_name: str) -> pd.DataFrame:
+        """
+        Führt eine gespeicherte Abfrage aus und gibt das Ergebnis zurück
+        
+        Args:
+            access_file_path: Pfad zur Access-Datenbank
+            query_name: Name der Abfrage
+            
+        Returns:
+            DataFrame mit dem Abfrage-Ergebnis
+        """
+        conn = None
+        try:
+            conn = connect(Path(access_file_path))
+            
+            # Führe die Abfrage direkt aus (Access Query)
+            formatted_name = format_table_name_for_ucanaccess(query_name)
+            sql = f"SELECT * FROM {formatted_name}"
+            
+            df = pd.read_sql(sql, conn)
+            logger.debug(f"Abfrage {query_name} ausgeführt: {len(df)} Zeilen")
+            return df
+            
+        except Exception as e:
+            logger.error(f"Fehler beim Ausführen der Abfrage {query_name}: {e}")
+            return pd.DataFrame()
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
+    
+    def get_schema_info(self, access_file_path: str) -> Dict[str, Any]:
+        """
+        Extrahiert Schema-Informationen aus der Access-Datenbank
+        
+        Args:
+            access_file_path: Pfad zur Access-Datenbank
+            
+        Returns:
+            Dict mit Tabellen, Spalten, Datentypen, Primary Keys und Foreign Keys
+        """
+        schema = {
+            "database": os.path.basename(access_file_path),
+            "tables": {},
+            "relationships": []
+        }
+        
+        conn = None
+        try:
+            conn = connect(Path(access_file_path))
+            
+            # Tabellen-Informationen abrufen
+            tables = self.list_tables(access_file_path)
+            
+            for table_name in tables:
+                if table_name.startswith('MSys'):
+                    continue
+                    
+                table_info = {
+                    "name": table_name,
+                    "columns": [],
+                    "primary_key": [],
+                    "foreign_keys": []
+                }
+                
+                try:
+                    # Spalten-Informationen abrufen
+                    columns_sql = f"""
+                    SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT
+                    FROM INFORMATION_SCHEMA.COLUMNS 
+                    WHERE TABLE_NAME = '{table_name}'
+                    ORDER BY ORDINAL_POSITION
+                    """
+                    
+                    try:
+                        columns_df = pd.read_sql(columns_sql, conn)
+                        for _, col in columns_df.iterrows():
+                            table_info["columns"].append({
+                                "name": col["COLUMN_NAME"],
+                                "type": col["DATA_TYPE"],
+                                "nullable": col["IS_NULLABLE"] == "YES",
+                                "default": col["COLUMN_DEFAULT"]
+                            })
+                    except:
+                        # Fallback: Lese eine Zeile um Spalten-Info zu bekommen
+                        sample_df = pd.read_sql(f"SELECT TOP 1 * FROM [{table_name}]", conn)
+                        for col_name in sample_df.columns:
+                            table_info["columns"].append({
+                                "name": col_name,
+                                "type": str(sample_df[col_name].dtype),
+                                "nullable": True,
+                                "default": None
+                            })
+                    
+                    # Primary Key Information (vereinfacht)
+                    try:
+                        pk_sql = f"""
+                        SELECT COLUMN_NAME 
+                        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+                        WHERE TABLE_NAME = '{table_name}' AND CONSTRAINT_NAME LIKE 'PK_%'
+                        """
+                        pk_df = pd.read_sql(pk_sql, conn)
+                        table_info["primary_key"] = pk_df["COLUMN_NAME"].tolist()
+                    except:
+                        pass
+                    
+                except Exception as e:
+                    logger.warning(f"Fehler beim Abrufen der Schema-Info für Tabelle {table_name}: {e}")
+                
+                schema["tables"][table_name] = table_info
+            
+            # Foreign Key Relationships (vereinfacht)
+            try:
+                fk_sql = """
+                SELECT 
+                    CONSTRAINT_NAME,
+                    TABLE_NAME as source_table,
+                    COLUMN_NAME as source_column,
+                    REFERENCED_TABLE_NAME as target_table,
+                    REFERENCED_COLUMN_NAME as target_column
+                FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
+                JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu 
+                    ON rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+                """
+                
+                fk_df = pd.read_sql(fk_sql, conn)
+                for _, fk in fk_df.iterrows():
+                    schema["relationships"].append({
+                        "name": fk["CONSTRAINT_NAME"],
+                        "source_table": fk["source_table"],
+                        "source_column": fk["source_column"],
+                        "target_table": fk["target_table"],
+                        "target_column": fk["target_column"]
+                    })
+            except Exception as e:
+                logger.warning(f"Fehler beim Abrufen der Foreign Key-Informationen: {e}")
+            
+            logger.info(f"Schema extrahiert: {len(schema['tables'])} Tabellen, {len(schema['relationships'])} Beziehungen")
+            
+        except Exception as e:
+            logger.error(f"Fehler beim Extrahieren des Schemas: {e}")
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
+        
+        return schema

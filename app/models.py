@@ -13,6 +13,10 @@ class ExportFormat(str, Enum):
 class ConversionRequest(BaseModel):
     selected_tables: List[str]
     export_format: ExportFormat
+    # Erweiterte Export-Optionen
+    create_pivot_tables: Optional[bool] = False
+    export_queries: Optional[bool] = False
+    export_schema: Optional[bool] = False
 
 
 class JobResponse(BaseModel):

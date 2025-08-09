@@ -1,6 +1,6 @@
 import os
 import tempfile
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import pandas as pd
 import json
 from reportlab.lib.pagesizes import letter, A4
@@ -12,6 +12,7 @@ import logging
 from starlette.concurrency import run_in_threadpool
 
 from ..core.config import settings
+from .export_advanced import AdvancedExportService
 
 logger = logging.getLogger(__name__)
 
@@ -21,25 +22,32 @@ class ExportService:
     
     def __init__(self):
         self.supported_formats = ['csv', 'xlsx', 'json', 'pdf']
+        self.advanced_service = AdvancedExportService()
     
-    async def export_data(self, data: Dict[str, pd.DataFrame], format_type: str, job_id: str) -> List[str]:
-        """Export data to specified format"""
+    async def export_data(self, data: Dict[str, pd.DataFrame], format_type: str, job_id: str, 
+                         create_pivot_tables: bool = False,
+                         export_queries: bool = False,
+                         export_schema: bool = False,
+                         access_service = None,
+                         access_file_path: Optional[str] = None) -> List[str]:
+        """Export data to specified format with advanced options"""
         try:
             export_dir = os.path.join(settings.EXPORT_DIR, job_id)
             os.makedirs(export_dir, exist_ok=True)
             
-            exported_files = []
+            # Prüfe ob erweiterte Features angefordert wurden
+            has_advanced_features = create_pivot_tables or export_queries or export_schema
             
-            if format_type == 'csv':
-                exported_files = await run_in_threadpool(self._export_csv, data, export_dir)
-            elif format_type == 'xlsx':
-                exported_files = await run_in_threadpool(self._export_xlsx, data, export_dir)
-            elif format_type == 'json':
-                exported_files = await run_in_threadpool(self._export_json, data, export_dir)
-            elif format_type == 'pdf':
-                exported_files = await run_in_threadpool(self._export_pdf, data, export_dir)
+            if has_advanced_features and access_service and access_file_path:
+                # Verwende erweiterten Export-Service
+                exported_files = await run_in_threadpool(
+                    self.advanced_service.export_with_advanced_options,
+                    data, format_type, job_id, export_dir, access_service, access_file_path,
+                    create_pivot_tables, export_queries, export_schema
+                )
             else:
-                raise ValueError(f"Unsupported export format: {format_type}")
+                # Standard-Export
+                exported_files = await self._standard_export(data, format_type, export_dir)
             
             logger.info(f"Exported {len(exported_files)} files for job {job_id} in {format_type} format")
             return exported_files
@@ -47,6 +55,23 @@ class ExportService:
         except Exception as e:
             logger.error(f"Export error for job {job_id}: {str(e)}")
             raise
+    
+    async def _standard_export(self, data: Dict[str, pd.DataFrame], format_type: str, export_dir: str) -> List[str]:
+        """Standard export without advanced features"""
+        exported_files = []
+        
+        if format_type == 'csv':
+            exported_files = await run_in_threadpool(self._export_csv, data, export_dir)
+        elif format_type == 'xlsx':
+            exported_files = await run_in_threadpool(self._export_xlsx, data, export_dir)
+        elif format_type == 'json':
+            exported_files = await run_in_threadpool(self._export_json, data, export_dir)
+        elif format_type == 'pdf':
+            exported_files = await run_in_threadpool(self._export_pdf, data, export_dir)
+        else:
+            raise ValueError(f"Unsupported export format: {format_type}")
+        
+        return exported_files
     
     def _export_csv(self, data: Dict[str, pd.DataFrame], export_dir: str) -> List[str]:
         """Export data as CSV files"""
