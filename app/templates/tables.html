@@ -9,10 +9,14 @@
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        html, body { 
-            height: auto; 
-            min-height: 100%; 
-            overflow-y: auto; 
+        html { 
+            height: 100%;
+            overflow-y: scroll;
+        }
+        body { 
+            height: auto;
+            min-height: 100vh;
+            overflow-y: visible;
         }
         .glass-card {
             background: rgba(255, 255, 255, 0.25);
@@ -33,7 +37,7 @@
         }
     </style>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 flex flex-col overflow-y-auto">
+<body class="bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">
     <!-- Navigation -->
     <nav class="navbar glass-card shadow-lg mb-8">
         <div class="navbar-start">
@@ -48,7 +52,7 @@
     </nav>
 
     <!-- Main Content -->
-    <main class="container mx-auto px-4 py-8 flex-1 overflow-visible max-w-6xl" x-data="tableSelector('{{ job_id }}')")
+    <div class="container mx-auto px-4 py-8 max-w-6xl" x-data="tableSelector('{{ job_id }}')")
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
@@ -120,42 +124,40 @@
 
         <!-- Tables Content -->
         <div x-show="!loading && !error && tables.length > 0">
-            <!-- Controls (Sticky) -->
-            <div class="sticky top-4 z-10 bg-base-100/80 backdrop-blur rounded-xl p-2 mb-4">
-                <div class="card shadow-lg overflow-visible">
-                    <div class="card-body">
-                        <div class="flex flex-wrap items-center justify-between gap-4">
-                            <!-- Selection Controls -->
-                            <div class="flex gap-2">
-                                <button @click="selectAll()" class="btn btn-sm btn-outline btn-primary">
-                                    <i class="fas fa-check-double mr-1"></i>
-                                    Alle auswählen
-                                </button>
-                                <button @click="deselectAll()" class="btn btn-sm btn-outline">
-                                    <i class="fas fa-times mr-1"></i>
-                                    Alle abwählen
-                                </button>
-                            </div>
+            <!-- Controls (Normal Position) -->
+            <div class="card glass-card shadow-lg mb-8 overflow-visible">
+                <div class="card-body">
+                    <div class="flex flex-wrap items-center justify-between gap-4">
+                        <!-- Selection Controls -->
+                        <div class="flex gap-2">
+                            <button @click="selectAll()" class="btn btn-sm btn-outline btn-primary">
+                                <i class="fas fa-check-double mr-1"></i>
+                                Alle auswählen
+                            </button>
+                            <button @click="deselectAll()" class="btn btn-sm btn-outline">
+                                <i class="fas fa-times mr-1"></i>
+                                Alle abwählen
+                            </button>
+                        </div>
 
-                            <!-- Format Selection -->
-                            <div class="form-control">
-                                <label class="label">
-                                    <span class="label-text font-medium">Export-Format:</span>
-                                </label>
-                                <select x-model="selectedFormat" class="select select-bordered select-sm w-full max-w-xs">
-                                    <option value="csv">CSV (Comma Separated)</option>
-                                    <option value="xlsx">Excel (XLSX)</option>
-                                    <option value="json">JSON (JavaScript Object)</option>
-                                    <option value="pdf">PDF (Portable Document)</option>
-                                </select>
-                            </div>
+                        <!-- Format Selection -->
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text font-medium">Export-Format:</span>
+                            </label>
+                            <select x-model="selectedFormat" class="select select-bordered select-sm w-full max-w-xs">
+                                <option value="csv">CSV (Comma Separated)</option>
+                                <option value="xlsx">Excel (XLSX)</option>
+                                <option value="json">JSON (JavaScript Object)</option>
+                                <option value="pdf">PDF (Portable Document)</option>
+                            </select>
+                        </div>
 
-                            <!-- Selected Count -->
-                            <div class="text-right">
-                                <div class="stat">
-                                    <div class="stat-value text-2xl text-emerald-600" x-text="selectedTables.length"></div>
-                                    <div class="stat-desc">von <span x-text="tables.length"></span> ausgewählt</div>
-                                </div>
+                        <!-- Selected Count -->
+                        <div class="text-right">
+                            <div class="stat">
+                                <div class="stat-value text-2xl text-emerald-600" x-text="selectedTables.length"></div>
+                                <div class="stat-desc">von <span x-text="tables.length"></span> ausgewählt</div>
                             </div>
                         </div>
                     </div>
@@ -271,7 +273,7 @@
                 </div>
             </div>
         </div>
-    </main>
+    </div>
 
     <!-- Footer -->
     <footer class="footer footer-center p-4 glass-card text-base-content mt-12">
