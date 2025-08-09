@@ -10,11 +10,69 @@
 4. **Build method:** `Web editor`
 5. **Stack-Inhalt:** Kopieren Sie den Inhalt aus `portainer-stack.yml`
 
-### 2. Konfiguration
+### 2. Flexible Konfiguration
+
+#### 🔧 Umgebungsvariablen (Environment Variables)
+Der Stack unterstützt flexible Konfiguration über Umgebungsvariablen:
+
+**In Portainer Stack Editor:**
+```yaml
+# Direkt im Stack definieren:
+environment:
+  - MAX_UPLOAD_SIZE=209715200  # 200MB statt Standard 100MB
+  - EXTERNAL_PORT=8081         # Port 8081 statt 8080
+```
+
+**Mit .env Datei (Advanced):**
+1. Kopieren Sie `.env.template` nach `.env`
+2. Passen Sie die Werte an
+3. In Portainer: `Advanced mode` → `.env` hochladen
+
+#### 📊 Dateigrössen-Konfiguration
+**Vordefinierte Größen:**
+```bash
+# 50MB (für kleine NAS)
+MAX_UPLOAD_SIZE=52428800
+
+# 100MB (Standard)
+MAX_UPLOAD_SIZE=104857600
+
+# 200MB (empfohlen für NAS)
+MAX_UPLOAD_SIZE=209715200
+
+# 500MB (große Datenbanken)
+MAX_UPLOAD_SIZE=524288000
+
+# 1GB (Server-Umgebung)
+MAX_UPLOAD_SIZE=1073741824
+```
+
+#### 🚀 Performance-Tuning
+```yaml
+# Kleine NAS (1-2 CPU Kerne):
+environment:
+  - MAX_CONCURRENT_JOBS=1
+  - CLEANUP_INTERVAL_MINUTES=30
+  - MAX_UPLOAD_SIZE=52428800
+
+# Mittlere NAS (4+ CPU Kerne):
+environment:
+  - MAX_CONCURRENT_JOBS=3
+  - CLEANUP_INTERVAL_MINUTES=60
+  - MAX_UPLOAD_SIZE=209715200
+
+# Server-Umgebung:
+environment:
+  - MAX_CONCURRENT_JOBS=5
+  - CLEANUP_INTERVAL_MINUTES=120
+  - MAX_UPLOAD_SIZE=1073741824
+```
 
 #### Port-Einstellungen
+#### Port-Einstellungen
 - **Standard:** Port `8080` (extern) → `8000` (intern)
-- **Anpassung:** Ändern Sie `8080:8000` falls Port 8080 bereits belegt ist
+- **Flexibel:** `EXTERNAL_PORT=8081` für anderen Port
+- **Stack-Variable:** `"${EXTERNAL_PORT:-8080}:8000"`
 
 #### Volume-Einstellungen
 **Option A: Docker Volumes (empfohlen)**
@@ -25,24 +83,51 @@ volumes:
   - access-converter-logs:/app/logs
 ```
 
-**Option B: Host Bind Mounts (für direkten NAS-Zugriff)**
+**Option B: Host Bind Mounts (direkter NAS-Zugriff)**
 ```yaml
+# In der Stack-Konfiguration ändern:
 volumes:
   - /volume1/docker/access-converter/uploads:/app/data/uploads
   - /volume1/docker/access-converter/exports:/app/data/exports
   - /volume1/docker/access-converter/logs:/app/logs
 ```
 
-### 3. Umgebungsvariablen
+**Option C: Flexible Pfade via Environment**
+```yaml
+environment:
+  - UPLOADS_PATH=/meine/nas/uploads
+  - EXPORTS_PATH=/meine/nas/exports
+  - LOGS_PATH=/meine/nas/logs
+# Dann in volumes: Option B aktivieren
+```
 
-| Variable | Wert | Beschreibung |
-|----------|------|--------------|
-| `LOG_LEVEL` | `INFO` | Logging-Level (DEBUG, INFO, WARNING, ERROR) |
-| `MAX_UPLOAD_SIZE` | `104857600` | Max. Upload-Größe in Bytes (100MB) |
-| `MAX_CONCURRENT_JOBS` | `3` | Gleichzeitige Konvertierungen |
-| `CLEANUP_INTERVAL_MINUTES` | `60` | Cleanup-Intervall in Minuten |
+### 3. Deployment mit Konfiguration
 
-### 4. Deployment
+#### Basis-Deployment
+```yaml
+# Minimale Konfiguration - nutzt alle Standardwerte
+version: '3.8'
+services:
+  access-converter:
+    image: ghcr.io/baronblk/access-converter:latest
+    ports:
+      - "8080:8000"
+```
+
+#### Erweiterte Konfiguration
+```yaml
+# Vollständige Konfiguration mit allen Optionen
+environment:
+  - LOG_LEVEL=INFO
+  - MAX_UPLOAD_SIZE=209715200      # 200MB
+  - MAX_CONCURRENT_JOBS=3
+  - CLEANUP_INTERVAL_MINUTES=60
+  - EXTERNAL_PORT=8080
+  - MAX_TABLES_PER_DB=100
+  - WORKER_TIMEOUT=300
+```
+
+### 4. Deployment-Prozess
 
 1. **Stack deployen:** Klicken Sie auf `Deploy the stack`
 2. **Status prüfen:** Warten Sie bis Status `Running` anzeigt
