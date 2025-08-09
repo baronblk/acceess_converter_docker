@@ -1,17 +1,25 @@
-# Access Database Converter v2.0
+# Access Database Converter v2.2
 
-Ein professioneller Docker-basierter Converter für Microsoft Access Datenbanken (.accdb/.mdb) zu Excel (XLSX) und CSV-Formaten.
+Ein professioneller Docker-basierter Converter für Microsoft Access Datenbanken (.accdb/.mdb) mit erweiterten Export-Features und automatischer Bereinigung.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)
 ![Python](https://img.shields.io/badge/python-3.11-blue.svg)
+![Version](https://img.shields.io/badge/version-v2.2-green.svg)
 
 ## 🚀 Features
 
 - **Vollständige Access-Unterstützung**: Konvertierung von .accdb und .mdb Dateien
-- **Multiple Export-Formate**: Excel (XLSX) und CSV-Export
+- **Erweiterte Export-Optionen**: 
+  - Excel (XLSX) mit optionalen Pivot-Tabellen
+  - CSV-Export
+  - JSON-Export
+  - PDF-Reports
+  - Schema-Export mit ER-Diagrammen (Mermaid)
+  - Query-Export und -Ausführung
 - **Moderne Web-UI**: Responsive Design mit Tailwind CSS und DaisyUI
 - **Docker-basiert**: Einfache Bereitstellung ohne komplexe Setup-Schritte
+- **Automatische Bereinigung**: Periodische Cleanup-Jobs für Uploads und Logs
 - **Internationale Unterstützung**: Deutsche Umlaute und internationale Zeichen
 - **Echtzeit-Progress**: Live-Fortschrittsverfolgung der Konvertierung
 - **Robuste Architektur**: FastAPI Backend mit UCanAccess Integration
@@ -45,30 +53,57 @@ cd access_converter_docker
 
 ### 2. Docker Container bauen und starten
 ```bash
-# Container bauen
-docker build -f docker/Dockerfile -t access-converter .
+### 2. Docker Container aus GitHub Container Registry
+```bash
+# Neueste Version von GitHub Container Registry
+docker run --rm -d -p 8100:8000 --name access-converter \
+  ghcr.io/baronblk/access-converter:latest
 
-# Container starten
-docker run --rm -d -p 8093:8000 --name access-converter access-converter
+# Oder spezifische Version
+docker run --rm -d -p 8100:8000 --name access-converter \
+  ghcr.io/baronblk/access-converter:v2.2-production
 ```
 
-### 3. Anwendung öffnen
-Öffnen Sie Ihren Browser und navigieren Sie zu: `http://localhost:8093`
+### 3. Lokales Build (Entwicklung)
+```bash
+# Repository klonen
+git clone https://github.com/baronblk/access_converter_docker.git
+cd access_converter_docker
+
+# Container bauen
+docker build -f docker/Dockerfile -t access-converter:v2.2-production .
+
+# Container starten
+docker run --rm -d -p 8100:8000 --name access-converter access-converter:v2.2-production
+```
+
+### 4. Anwendung öffnen
+Öffnen Sie Ihren Browser und navigieren Sie zu: `http://localhost:8100`
 
 ## 📋 Verwendung
 
 1. **Access-Datei hochladen**: Ziehen Sie Ihre .accdb/.mdb Datei in den Upload-Bereich
 2. **Tabellen auswählen**: Wählen Sie die zu konvertierenden Tabellen aus
-3. **Export-Format wählen**: CSV oder Excel (XLSX)
+3. **Export-Optionen wählen**: 
+   - Grundformat: CSV, Excel, JSON, PDF
+   - **Erweiterte Optionen**: Pivot-Tabellen, Query-Export, Schema-Export
 4. **Konvertierung starten**: Verfolgen Sie den Fortschritt in Echtzeit
 5. **Download**: Laden Sie die konvertierten Dateien als ZIP-Archiv herunter
+
+### Erweiterte Export-Features
+
+- **Pivot-Tabellen**: Automatische Erstellung von Excel-Pivot-Tabellen aus numerischen Daten
+- **Query-Export**: Export aller Access-Queries als JSON und Ausführung als CSV
+- **Schema-Export**: ER-Diagramm-Generierung mit Mermaid (optional SVG-Rendering)
 
 ## 🔧 Technische Details
 
 ### Backend-Stack
 - **FastAPI**: Moderne, schnelle Web-API
-- **UCanAccess**: Java-basierter Access-Treiber
+- **UCanAccess 5.0.1**: Java-basierter Access-Treiber
 - **Pandas**: Datenverarbeitung und Export
+- **XlsxWriter**: Erweiterte Excel-Export-Features mit Pivot-Tabellen
+- **ReportLab**: PDF-Generierung
 - **Docker**: Containerisierung mit Multi-Stage Build
 
 ### Frontend-Stack
@@ -78,7 +113,7 @@ docker run --rm -d -p 8093:8000 --name access-converter access-converter
 
 ### Unterstützte Formate
 - **Input**: Microsoft Access (.accdb, .mdb)
-- **Output**: Excel (.xlsx), CSV (.csv)
+- **Output**: Excel (.xlsx mit Pivot-Tabellen), CSV (.csv), JSON (.json), PDF (.pdf), Mermaid (.mmd), SVG (.svg)
 ## 🐛 Fehlerbehebung
 
 ### Container-Logs anzeigen
@@ -131,6 +166,26 @@ docker run --rm -it -p 8093:8000 -v "$(pwd)/app:/app/app" access-converter
 5. Pull Request erstellen
 
 ## 📝 Changelog
+
+### v2.2.0 (2025-08-09) - Production Ready
+- **🔧 JAR-Erkennung behoben**: Vollständige Korrektur der UCanAccess JAR-Erkennung
+- **🐛 Code-Fehler behoben**: Alle Import- und Type-Hint-Probleme gelöst
+- **🧹 Automatische Bereinigung**: Periodische Cleanup-Jobs für Uploads und Logs (60min Intervall)
+- **📊 Erweiterte Export-Features**:
+  - Pivot-Tabellen in Excel mit XlsxWriter
+  - Query-Export als JSON und ausführbare CSV-Dateien
+  - Schema-Export mit ER-Diagrammen (Mermaid-Format)
+  - Optional SVG-Rendering für Schema-Diagramme
+- **🚀 Production-Features**:
+  - GitHub Container Registry Integration
+  - Verbesserte Fehlerbehandlung und Logging
+  - Optimierte Docker-Images
+  - Comprehensive API-Dokumentation
+
+### v2.1.0 (2025-08-09)
+- **📊 Advanced Export Service**: Neue erweiterte Export-Funktionalitäten
+- **🔄 Automatische Bereinigung**: Background-Services für File-Management
+- **⚙️ JAR-System-Verbesserungen**: Optimierte UCanAccess-Integration
 
 ### v2.0.0 (2025-08-09)
 - **Vollständige Überarbeitung**: Neue moderne Web-UI mit Tailwind CSS und DaisyUI
