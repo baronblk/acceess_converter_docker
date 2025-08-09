@@ -2,9 +2,11 @@ import os
 import uuid
 import tempfile
 import shutil
-from typing import Optional, List
+from typing import Optional, List, Iterator
 import logging
 from pathlib import Path
+import time
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -168,3 +170,161 @@ def format_table_name(name: str) -> Optional[str]:
     formatted = ' '.join(word.capitalize() for word in formatted.split())
     
     return formatted
+
+
+# ============================================================================
+# CLEANUP UTILITIES
+# ============================================================================
+
+def age_hours(path: Path) -> float:
+    """Berechnet das Alter einer Datei in Stunden"""
+    try:
+        mtime = path.stat().st_mtime
+        age_seconds = time.time() - mtime
+        return age_seconds / 3600.0
+    except (OSError, FileNotFoundError):
+        # Wenn Datei nicht existiert, als sehr alt betrachten
+        return float('inf')
+
+
+def iter_files(dir_path: Path) -> Iterator[Path]:
+    """Iteriert über alle Dateien in einem Verzeichnis (keine Unterverzeichnisse)"""
+    try:
+        if dir_path.exists() and dir_path.is_dir():
+            for item in dir_path.iterdir():
+                if item.is_file():
+                    yield item
+    except (OSError, PermissionError) as e:
+        logger.warning(f"Fehler beim Durchsuchen von {dir_path}: {e}")
+
+
+def cleanup_uploads_for_file_id(file_id: str, upload_dir: Optional[str] = None) -> List[Path]:
+    """
+    Löscht alle Upload-Dateien für eine bestimmte file_id nach erfolgreichem Job.
+    
+    Args:
+        file_id: Die ID der Datei (z.B. Job-ID oder eindeutige Datei-ID)
+        upload_dir: Upload-Verzeichnis (default: aus config)
+    
+    Returns:
+        Liste der gelöschten Dateipfade
+    """
+    if upload_dir is None:
+        from app.core.config import settings
+        upload_dir = settings.UPLOAD_DIR
+    
+    upload_path = Path(upload_dir)
+    removed_files = []
+    
+    if not upload_path.exists():
+        logger.warning(f"Upload-Verzeichnis existiert nicht: {upload_path}")
+        return removed_files
+    
+    # Suche nach Dateien mit dem Muster: f"{file_id}_*.(accdb|mdb)"
+    pattern_prefixes = [f"{file_id}_"]
+    extensions = ['.mdb', '.accdb']
+    
+    for file_path in iter_files(upload_path):
+        # Prüfe ob Dateiname mit file_id beginnt und richtige Erweiterung hat
+        filename = file_path.name
+        has_matching_prefix = any(filename.startswith(prefix) for prefix in pattern_prefixes)
+        has_matching_extension = any(filename.lower().endswith(ext) for ext in extensions)
+        
+        if has_matching_prefix and has_matching_extension:
+            try:
+                file_path.unlink()
+                removed_files.append(file_path)
+                logger.debug(f"Upload-Datei gelöscht: {file_path}")
+            except (OSError, FileNotFoundError) as e:
+                logger.warning(f"Fehler beim Löschen von {file_path}: {e}")
+    
+    if removed_files:
+        logger.info(f"Post-Job Cleanup: {len(removed_files)} Upload-Dateien für file_id '{file_id}' gelöscht")
+    else:
+        logger.debug(f"Post-Job Cleanup: Keine Upload-Dateien für file_id '{file_id}' gefunden")
+    
+    return removed_files
+
+
+def cleanup_old_uploads(hours: int, upload_dir: Optional[str] = None) -> List[Path]:
+    """
+    Löscht alle Upload-Dateien, die älter als die angegebene Stundenanzahl sind.
+    
+    Args:
+        hours: Maximales Alter der Dateien in Stunden
+        upload_dir: Upload-Verzeichnis (default: aus config)
+    
+    Returns:
+        Liste der gelöschten Dateipfade
+    """
+    if upload_dir is None:
+        from app.core.config import settings
+        upload_dir = settings.UPLOAD_DIR
+    
+    upload_path = Path(upload_dir)
+    removed_files = []
+    kept_count = 0
+    
+    if not upload_path.exists():
+        logger.warning(f"Upload-Verzeichnis existiert nicht: {upload_path}")
+        return removed_files
+    
+    for file_path in iter_files(upload_path):
+        file_age = age_hours(file_path)
+        
+        if file_age > hours:
+            try:
+                file_path.unlink()
+                removed_files.append(file_path)
+                logger.debug(f"Alte Upload-Datei gelöscht: {file_path} (Alter: {file_age:.1f}h)")
+            except (OSError, FileNotFoundError) as e:
+                logger.warning(f"Fehler beim Löschen von {file_path}: {e}")
+        else:
+            kept_count += 1
+    
+    logger.info(f"Upload-Bereinigung: {len(removed_files)} Dateien gelöscht, {kept_count} behalten (Schwellwert: {hours}h)")
+    return removed_files
+
+
+def cleanup_old_logs(hours: int, logs_dir: Optional[str] = None) -> List[Path]:
+    """
+    Löscht alle Log-Dateien, die älter als die angegebene Stundenanzahl sind.
+    
+    Args:
+        hours: Maximales Alter der Dateien in Stunden
+        logs_dir: Log-Verzeichnis (default: aus config)
+    
+    Returns:
+        Liste der gelöschten Dateipfade
+    """
+    if logs_dir is None:
+        from app.core.config import settings
+        logs_dir = settings.LOGS_DIR
+    
+    logs_path = Path(logs_dir)
+    removed_files = []
+    kept_count = 0
+    
+    if not logs_path.exists():
+        logger.warning(f"Log-Verzeichnis existiert nicht: {logs_path}")
+        return removed_files
+    
+    for file_path in iter_files(logs_path):
+        # Nur Log-Dateien berücksichtigen (häufige Endungen)
+        if not any(file_path.name.lower().endswith(ext) for ext in ['.log', '.txt', '.out']):
+            continue
+            
+        file_age = age_hours(file_path)
+        
+        if file_age > hours:
+            try:
+                file_path.unlink()
+                removed_files.append(file_path)
+                logger.debug(f"Alte Log-Datei gelöscht: {file_path} (Alter: {file_age:.1f}h)")
+            except (OSError, FileNotFoundError) as e:
+                logger.warning(f"Fehler beim Löschen von {file_path}: {e}")
+        else:
+            kept_count += 1
+    
+    logger.info(f"Log-Bereinigung: {len(removed_files)} Dateien gelöscht, {kept_count} behalten (Schwellwert: {hours}h)")
+    return removed_files

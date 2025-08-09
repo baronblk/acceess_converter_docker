@@ -14,6 +14,7 @@ from datetime import datetime
 import zipfile
 import asyncio
 import time
+import threading
 
 from .core.config import settings
 from .core.logging import setup_logging, RequestLoggerAdapter, get_logger
@@ -21,6 +22,7 @@ from .jobs import JobManager, JobStatus
 from .services.ucan import AccessService, list_tables_detailed
 from .services.export import ExportService
 from .models import ConversionRequest, JobResponse
+from .utils import cleanup_uploads_for_file_id, cleanup_old_uploads, cleanup_old_logs
 
 def normalize_file_path(old_path: str) -> str:
     """Normalize file paths for backward compatibility with old upload structure"""
@@ -96,6 +98,59 @@ export_service = ExportService()
 # Ensure upload and export directories exist
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 os.makedirs(settings.EXPORT_DIR, exist_ok=True)
+os.makedirs(settings.LOGS_DIR, exist_ok=True)
+
+
+# ============================================================================
+# PERIODIC CLEANUP FUNCTIONALITY
+# ============================================================================
+
+cleanup_thread = None
+cleanup_stop_event = threading.Event()
+
+def periodic_cleanup_worker():
+    """Hintergrund-Worker für periodische Bereinigung"""
+    logger.info(f"Periodische Bereinigung gestartet (Intervall: {settings.CLEANUP_INTERVAL_MIN} Minuten)")
+    
+    while not cleanup_stop_event.is_set():
+        try:
+            # Cleanup alte Uploads
+            removed_uploads = cleanup_old_uploads(settings.CLEANUP_AFTER_HOURS)
+            
+            # Cleanup alte Logs  
+            removed_logs = cleanup_old_logs(settings.CLEANUP_AFTER_HOURS)
+            
+            if removed_uploads or removed_logs:
+                logger.info(f"Periodische Bereinigung abgeschlossen: "
+                          f"{len(removed_uploads)} Uploads, {len(removed_logs)} Logs entfernt")
+            
+        except Exception as e:
+            logger.error(f"Fehler bei periodischer Bereinigung: {e}")
+        
+        # Warten bis zum nächsten Cleanup oder Stop-Signal
+        cleanup_stop_event.wait(timeout=settings.CLEANUP_INTERVAL_MIN * 60)
+    
+    logger.info("Periodische Bereinigung beendet")
+
+def start_periodic_cleanup():
+    """Startet den periodischen Cleanup-Thread"""
+    global cleanup_thread
+    if cleanup_thread is None or not cleanup_thread.is_alive():
+        cleanup_stop_event.clear()
+        cleanup_thread = threading.Thread(target=periodic_cleanup_worker, daemon=True)
+        cleanup_thread.start()
+        logger.info("Periodic cleanup thread gestartet")
+
+def stop_periodic_cleanup():
+    """Stoppt den periodischen Cleanup-Thread"""
+    global cleanup_thread
+    if cleanup_thread and cleanup_thread.is_alive():
+        cleanup_stop_event.set()
+        cleanup_thread.join(timeout=5)
+        logger.info("Periodic cleanup thread gestoppt")
+
+# Starte periodische Bereinigung beim App-Start
+start_periodic_cleanup()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -108,6 +163,83 @@ async def home(request: Request):
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+
+@app.get("/diagnostics/cleanup")
+async def cleanup_diagnostics(dry_run: bool = True):
+    """
+    Manuelle Bereinigung mit Diagnose-Funktionalität
+    
+    Args:
+        dry_run: Wenn True, werden Dateien nur aufgelistet aber nicht gelöscht
+    
+    Returns:
+        JSON mit Listen der (zu) entfernenden Dateien
+    """
+    try:
+        result = {
+            "dry_run": dry_run,
+            "timestamp": datetime.now().isoformat(),
+            "settings": {
+                "cleanup_after_hours": settings.CLEANUP_AFTER_HOURS,
+                "upload_dir": settings.UPLOAD_DIR,
+                "logs_dir": settings.LOGS_DIR
+            },
+            "uploads_removed": [],
+            "logs_removed": []
+        }
+        
+        if dry_run:
+            # Simuliere Cleanup ohne Löschen
+            from .utils import iter_files, age_hours
+            
+            # Prüfe Upload-Dateien
+            upload_path = Path(settings.UPLOAD_DIR)
+            if upload_path.exists():
+                for file_path in iter_files(upload_path):
+                    if age_hours(file_path) > settings.CLEANUP_AFTER_HOURS:
+                        result["uploads_removed"].append({
+                            "path": str(file_path),
+                            "age_hours": round(age_hours(file_path), 1),
+                            "size_bytes": file_path.stat().st_size if file_path.exists() else 0
+                        })
+            
+            # Prüfe Log-Dateien
+            logs_path = Path(settings.LOGS_DIR)
+            if logs_path.exists():
+                for file_path in iter_files(logs_path):
+                    if (any(file_path.name.lower().endswith(ext) for ext in ['.log', '.txt', '.out']) 
+                        and age_hours(file_path) > settings.CLEANUP_AFTER_HOURS):
+                        result["logs_removed"].append({
+                            "path": str(file_path),
+                            "age_hours": round(age_hours(file_path), 1),
+                            "size_bytes": file_path.stat().st_size if file_path.exists() else 0
+                        })
+            
+            logger.info(f"Cleanup-Diagnose (dry_run): {len(result['uploads_removed'])} Uploads, "
+                       f"{len(result['logs_removed'])} Logs würden gelöscht")
+        else:
+            # Führe tatsächliche Bereinigung durch
+            removed_uploads = cleanup_old_uploads(settings.CLEANUP_AFTER_HOURS)
+            removed_logs = cleanup_old_logs(settings.CLEANUP_AFTER_HOURS)
+            
+            result["uploads_removed"] = [{"path": str(p)} for p in removed_uploads]
+            result["logs_removed"] = [{"path": str(p)} for p in removed_logs]
+            
+            logger.info(f"Manuelle Bereinigung durchgeführt: {len(removed_uploads)} Uploads, "
+                       f"{len(removed_logs)} Logs gelöscht")
+        
+        result["summary"] = {
+            "uploads_count": len(result["uploads_removed"]),
+            "logs_count": len(result["logs_removed"]),
+            "total_count": len(result["uploads_removed"]) + len(result["logs_removed"])
+        }
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Fehler bei Cleanup-Diagnose: {e}")
+        raise HTTPException(status_code=500, detail=f"Cleanup-Diagnose fehlgeschlagen: {str(e)}")
 
 
 @app.get("/diagnostics/ucanaccess")
@@ -419,6 +551,13 @@ async def _process_conversion(job_id: str, selected_tables: List[str], export_fo
         job_manager.update_job_status(job_id, JobStatus.COMPLETED)
         job_manager.update_job_progress(job_id, 100, "Conversion completed")
         
+        # Post-Job Cleanup: Remove upload files for this job_id
+        try:
+            cleanup_uploads_for_file_id(job_id)
+        except Exception as cleanup_error:
+            # Log cleanup error but don't fail the job
+            logger.warning(f"Post-Job Cleanup fehlgeschlagen für job_id {job_id}: {cleanup_error}")
+        
         logger.info(f"Conversion completed for job {job_id}")
         
     except ValueError as e:
@@ -507,6 +646,10 @@ async def _log_ucanaccess_diagnostics():
 async def shutdown_event():
     """Application shutdown"""
     logger.info("Access Database Converter shutting down")
+    
+    # Stop periodic cleanup thread
+    stop_periodic_cleanup()
+    
     # Clean up temp files
     try:
         for job_id, job in job_manager.jobs.items():

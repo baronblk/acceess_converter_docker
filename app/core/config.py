@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     CLEANUP_INTERVAL_HOURS: int = 1
     MAX_JOB_AGE_HOURS: int = 24
     
+    # Cleanup settings
+    CLEANUP_AFTER_HOURS: int = 24  # Delete files older than X hours
+    CLEANUP_INTERVAL_MIN: int = 60  # How often cleanup runs (minutes)
+    LOGS_DIR: str = "/app/logs"
+    
     # Database settings
     ALLOWED_EXTENSIONS: list = [".mdb", ".accdb"]
     
