@@ -7,6 +7,7 @@ Erweiterte Export-Services für Access Database Converter
 
 import json
 import os
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 import pandas as pd
@@ -332,8 +333,12 @@ class SchemaExportService:
                 logger.warning(f"Mermaid CLI Fehler: {result.stderr}")
                 return None
                 
-        except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
-            logger.warning(f"Mermaid CLI nicht verfügbar oder Fehler: {e}")
+        except Exception as e:
+            # Prüfe spezifische Exception-Typen
+            if "TimeoutExpired" in str(type(e)) or "FileNotFoundError" in str(type(e)):
+                logger.warning(f"Mermaid CLI nicht verfügbar oder Fehler: {e}")
+            else:
+                logger.warning(f"Mermaid CLI nicht verfügbar oder Fehler: {e}")
             return None
 
 

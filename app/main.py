@@ -627,35 +627,16 @@ async def _log_java_diagnostics():
 
 
 async def _log_ucanaccess_diagnostics():
-    """Log UCanAccess JAR files and configuration"""
-    ucanaccess_home = os.environ.get('UCANACCESS_HOME', '/opt/ucanaccess')
+    """Log UCanAccess JAR files and configuration using the same logic as the UCanAccess service"""
+    from .services.ucan import _ucan_home, _collect_ucan_jars
+    
+    ucanaccess_home = _ucan_home()
     logger.info(f"UCANACCESS_HOME: {ucanaccess_home}")
     
-    required_jars = [
-        "ucanaccess-5.0.1.jar",
-        "lib/commons-lang3-3.8.1.jar", 
-        "lib/commons-logging-1.2.jar",
-        "lib/hsqldb-2.5.0.jar",
-        "lib/jackcess-3.0.1.jar"
-    ]
-    
-    found_jars = []
-    missing_jars = []
-    
-    for jar in required_jars:
-        jar_path = os.path.join(ucanaccess_home, jar)
-        if os.path.exists(jar_path):
-            size_mb = os.path.getsize(jar_path) / (1024 * 1024)
-            found_jars.append(f"{jar} ({size_mb:.1f}MB)")
-            logger.debug(f"Found JAR: {jar_path} ({size_mb:.1f}MB)")
-        else:
-            missing_jars.append(jar)
-            logger.warning(f"Missing JAR: {jar_path}")
-    
-    logger.info(f"Found JARs ({len(found_jars)}): {', '.join(found_jars)}")
+    # Use the same JAR collection logic as the UCanAccess service
+    found_jars, missing_jars = _collect_ucan_jars()
     
     if missing_jars:
-        logger.error(f"Missing JARs ({len(missing_jars)}): {', '.join(missing_jars)}")
         logger.error("UCanAccess may not work properly without these JARs")
     else:
         logger.info("All required UCanAccess JARs found")

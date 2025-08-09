@@ -67,14 +67,13 @@ def _collect_ucan_jars() -> Tuple[List[str], List[str]]:
     """
     ucan_home = _ucan_home()
     
-    # Required JAR patterns
+    # Required JAR patterns - Updated to match actual JAR locations
     required_patterns = [
-        'lib/ucanaccess*.jar',
-        'lib/hsqldb*.jar',
-        'lib/jackcess-[0-9]*.jar',
-        'lib/jackcess-encrypt*.jar',
-        'lib/commons-lang*.jar',
-        'lib/commons-logging*.jar'
+        'lib/ucanaccess*.jar',      # Main UCanAccess JAR
+        'lib/hsqldb*.jar',          # HSQLDB database engine
+        'lib/jackcess*.jar',        # Jackcess Access reader (includes jackcess and jackcess-encrypt)
+        'lib/commons-lang*.jar',    # Apache Commons Lang
+        'lib/commons-logging*.jar'  # Apache Commons Logging
     ]
     
     found_jars = []
@@ -91,13 +90,29 @@ def _collect_ucan_jars() -> Tuple[List[str], List[str]]:
         matches = glob.glob(str(jar_path))
         
         if matches:
-            found_jars.extend([str(Path(m).resolve()) for m in matches])
+            for match in matches:
+                resolved_path = str(Path(match).resolve())
+                found_jars.append(resolved_path)
+                # Log each found JAR with its size
+                try:
+                    size_mb = os.path.getsize(match) / (1024 * 1024)
+                    jar_name = Path(match).name
+                    logger.info(f"Found JAR: {jar_name} ({size_mb:.1f}MB)")
+                except:
+                    logger.info(f"Found JAR: {Path(match).name}")
             logger.debug(f"Found JARs for pattern {pattern}: {matches}")
         else:
-            missing_jars.append(str(jar_path))
-            logger.warning(f"No JARs found for pattern: {pattern}")
+            missing_pattern = pattern.replace('*', '[version]')
+            missing_jars.append(missing_pattern)
+            logger.warning(f"Missing JAR: {ucan_home}/{missing_pattern}")
     
-    logger.info(f"JAR discovery: {len(found_jars)} found, {len(missing_jars)} missing")
+    # Summary logging
+    if found_jars:
+        jar_names = [Path(jar).name for jar in found_jars]
+        logger.info(f"Found JARs ({len(found_jars)}): {', '.join(jar_names)}")
+    
+    if missing_jars:
+        logger.error(f"Missing JARs ({len(missing_jars)}): {', '.join(missing_jars)}")
     
     return found_jars, missing_jars
 
@@ -581,12 +596,13 @@ class AccessService:
             logger.warning(f"Fehler beim Extrahieren der Abfragen: {e}")
             # Fallback: Versuche über Metadaten
             try:
-                cursor = conn.cursor()
-                # Alternative Methode über INFORMATION_SCHEMA (falls verfügbar)
-                cursor.execute("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.VIEWS")
-                views = cursor.fetchall()
-                for view in views:
-                    queries[view[0]] = f"-- Definition für View {view[0]} nicht verfügbar"
+                if conn is not None:
+                    cursor = conn.cursor()
+                    # Alternative Methode über INFORMATION_SCHEMA (falls verfügbar)
+                    cursor.execute("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.VIEWS")
+                    views = cursor.fetchall()
+                    for view in views:
+                        queries[view[0]] = f"-- Definition für View {view[0]} nicht verfügbar"
             except:
                 pass
                 
