@@ -1,22 +1,5 @@
 <!DOCTYPE html>
-<html lang=    </style>
-</head>
-<body class="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 flex flex-col">
-    <!-- Navigation -->
-    <nav class="navbar glass-card shadow-lg mb-8">
-        <div class="navbar-start">
-            <div class="text-xl font-bold text-emerald-700">
-                <i class="fas fa-database mr-2"></i>
-                Access Converter
-            </div>
-        </div>
-        <div class="navbar-end">
-            <div class="badge badge-emerald">v2.0</div>
-        </div>
-    </nav>
-
-    <!-- Main Content -->
-    <main class="container mx-auto px-4 py-8 flex-1 overflow-visible max-w-6xl" x-data="tableSelector('{{ job_id }}')")merald">
+<html lang="de" data-theme="emerald">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -26,6 +9,11 @@
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        html, body { 
+            height: auto; 
+            min-height: 100%; 
+            overflow-y: auto; 
+        }
         .glass-card {
             background: rgba(255, 255, 255, 0.25);
             backdrop-filter: blur(10px);
@@ -45,7 +33,40 @@
         }
     </style>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">
+<body class="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 flex flex-col overflow-y-auto">
+    <!-- Navigation -->
+    <nav class="navbar glass-card shadow-lg mb-8">
+        <div class="navbar-start">
+            <div class="text-xl font-bold text-emerald-700">
+                <i class="fas fa-database mr-2"></i>
+                Access Converter
+            </div>
+        </div>
+        <div class="navbar-end">
+            <div class="badge badge-emerald">v2.0</div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8 flex-1 overflow-visible max-w-6xl" x-data="tableSelector('{{ job_id }}')")
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .table-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .table-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .table-card.selected {
+            border-color: #10b981;
+            background-color: rgba(16, 185, 129, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 flex flex-col overflow-y-auto">
     <!-- Navigation -->
     <nav class="navbar glass-card shadow-lg mb-8">
         <div class="navbar-start">
@@ -141,11 +162,10 @@
                 </div>
             </div>
 
-            <!-- Tables Grid (Scrollable) -->
-            <div class="mt-4 max-h-[65vh] overflow-y-auto pr-1">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Tables Grid (Full Page Scrollable) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 <template x-for="table in tables" :key="table.name">
-                    <div class="table-card card glass-card shadow-lg border-2 border-transparent"
+                    <div class="table-card card glass-card shadow-lg border-2 border-transparent overflow-visible"
                          :class="{ 'selected': selectedTables.includes(table.name) }"
                          @click="toggleTable(table.name)">
                         <div class="card-body">
@@ -176,10 +196,7 @@
                         </div>
                     </div>
                 </template>
-                </div>
-            </div>
-
-            <!-- Action Buttons (Outside Scroll Container) -->
+            </div>            <!-- Action Buttons (Outside Scroll Container) -->
             <div class="card glass-card shadow-lg overflow-visible">
                 <div class="card-body">
                     <div class="flex flex-wrap items-center justify-between gap-4">

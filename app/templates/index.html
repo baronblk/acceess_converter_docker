@@ -9,6 +9,11 @@
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        html, body { 
+            height: auto; 
+            min-height: 100%; 
+            overflow-y: auto; 
+        }
         .glass-card {
             background: rgba(255, 255, 255, 0.25);
             backdrop-filter: blur(10px);
@@ -27,7 +32,7 @@
         }
     </style>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 flex flex-col">
+<body class="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 flex flex-col overflow-y-auto">
     <!-- Navigation -->
     <nav class="navbar glass-card shadow-lg mb-8">
         <div class="navbar-start">

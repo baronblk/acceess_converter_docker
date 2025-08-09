@@ -9,6 +9,11 @@
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        html, body { 
+            height: auto; 
+            min-height: 100%; 
+            overflow-y: auto; 
+        }
         .glass-card {
             background: rgba(255, 255, 255, 0.25);
             backdrop-filter: blur(10px);
@@ -27,7 +32,7 @@
         }
     </style>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">
+<body class="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 flex flex-col overflow-y-auto">
     <!-- Navigation -->
     <nav class="navbar glass-card shadow-lg mb-8">
         <div class="navbar-start">
@@ -42,7 +47,7 @@
     </nav>
 
     <!-- Main Content -->
-    <div class="container mx-auto px-4 py-8 max-w-6xl" x-data="tableSelector()">
+    <main class="container mx-auto px-4 py-8 flex-1 overflow-visible max-w-6xl" x-data="tableSelector()">
         <!-- Header -->
         <div class="text-center mb-8">
             <h1 class="text-4xl font-bold text-gray-800 mb-4">
@@ -72,6 +77,13 @@
         <div class="text-center">
             <p class="text-gray-600">Tabellenseite wird geladen...</p>
         </div>
-    </div>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="footer footer-center p-4 glass-card text-base-content mt-12">
+        <div>
+            <p>Copyright © 2024 - Access Database Converter v2.0</p>
+        </div>
+    </footer>
 </body>
 </html>
