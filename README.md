@@ -2,7 +2,7 @@
 
 Ein professioneller Docker-basierter Converter für Microsoft Access Datenbanken (.accdb/.mdb) mit erweiterten Export-Features und automatischer Bereinigung.
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![License](https://img.shields.io/badge/license-BSL%201.1-orange.svg)
 ![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)
 ![Python](https://img.shields.io/badge/python-3.11-blue.svg)
 ![Version](https://img.shields.io/badge/version-v2.2-green.svg)
@@ -283,7 +283,36 @@ Bei Fragen oder Problemen erstellen Sie bitte ein [Issue](https://github.com/bar
 
 ## Lizenz
 
-MIT License - siehe LICENSE Datei für Details.
+## 📄 Lizenz
+
+**Business Source License (BSL) 1.1**
+
+Copyright © 2025 GCNG Software - Rene Süß
+
+Diese Software ist unter der Business Source License 1.1 lizenziert:
+
+### ✅ Erlaubte Nutzung (kostenlos):
+- **Nicht-kommerzielle Nutzung** für persönliche Projekte
+- **Forschung und Bildung**
+- **Open-Source-Projekte** ohne kommerziellen Zweck
+- **Evaluierung und Tests**
+
+### ⚠️ Eingeschränkte Nutzung:
+- **Kommerzielle Nutzung** erfordert eine schriftliche Lizenz
+- **Software-as-a-Service (SaaS)** Angebote
+- **Integration in kostenpflichtige Produkte**
+- **Kommerzielle Beratung** auf Basis der Software
+- **Unternehmen** mit >5 Mitarbeitern oder >100.000€ Jahresumsatz
+
+### 🔄 Automatische Freigabe:
+Am **09. August 2030** wird diese Software automatisch unter der **MIT-Lizenz** freigegeben.
+
+### 💼 Kommerzielle Lizenz:
+Für kommerzielle Nutzung kontaktieren Sie:
+- **E-Mail**: baronblk@googlemail.com
+- **Betreff**: "Kommerzielle Lizenz - Access Database Converter"
+
+Vollständige Lizenz: siehe [LICENSE](LICENSE) Datei für Details.
 
 ## Support
 
