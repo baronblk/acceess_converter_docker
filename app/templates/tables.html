@@ -36,7 +36,7 @@
       </div>
     </div>
     <div class="navbar-end">
-      <div class="badge badge-emerald">v2.0</div>
+      <div class="badge badge-emerald" x-data="{ version: 'latest' }" x-init="loadVersion()" x-text="version">latest</div>
     </div>
   </nav>
 
@@ -274,7 +274,7 @@
 
   <!-- Footer -->
   <footer class="footer footer-center p-4 glass-card text-base-content">
-    <div><p>Copyright © 2025 GCNG Software - Rene Süß - Access Database Converter v2.0</p></div>
+    <div><p x-data="{ version: 'v2.2' }" x-init="loadVersion()" x-text="`Copyright © 2025 GCNG Software - Rene Süß - Access Database Converter ${version}`">Copyright © 2025 GCNG Software - Rene Süß - Access Database Converter v2.2</p></div>
   </footer>
 
   <script>
@@ -369,6 +369,19 @@
           } catch(err){ this.error = err.message || 'Netzwerkfehler beim Download'; console.error(err); }
         }
       };
+    }
+    
+    // Global function to load version
+    async function loadVersion() {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const config = await response.json();
+          this.version = `v${config.app_version}`;
+        }
+      } catch (error) {
+        console.log('Using default version:', error);
+      }
     }
   </script>
 </body>

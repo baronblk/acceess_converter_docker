@@ -1,5 +1,5 @@
 <!--
-Access Database Converter v2.0
+Access Database Converter v2.2
 Copyright © 2025 GCNG Software - Rene Süß
 
 Lizenziert unter der Business Source License 1.1
@@ -59,7 +59,7 @@ Kontakt für kommerzielle Lizenz: baronblk@googlemail.com
             </div>
         </div>
         <div class="navbar-end">
-            <div class="badge badge-emerald">v2.0</div>
+            <div class="badge badge-emerald" x-data="{ version: 'latest' }" x-init="loadVersion()" x-text="version">latest</div>
         </div>
     </nav>
 
@@ -271,7 +271,7 @@ Kontakt für kommerzielle Lizenz: baronblk@googlemail.com
     <!-- Footer -->
     <footer class="footer footer-center p-4 glass-card text-base-content mt-12">
         <div>
-            <p>Copyright © 2025 GCNG Software - Rene Süß - Access Database Converter v2.0</p>
+            <p x-data="{ version: 'v2.2' }" x-init="loadVersion()" x-text="`Copyright © 2025 GCNG Software - Rene Süß - Access Database Converter ${version}`">Copyright © 2025 GCNG Software - Rene Süß - Access Database Converter</p>
         </div>
     </footer>
 
@@ -472,6 +472,19 @@ Kontakt für kommerzielle Lizenz: baronblk@googlemail.com
                     return `${size} ${sizes[i]}`;
                 }
             };
+        }
+        
+        // Global function to load version
+        async function loadVersion() {
+            try {
+                const response = await fetch('/api/config');
+                if (response.ok) {
+                    const config = await response.json();
+                    this.version = `v${config.app_version}`;
+                }
+            } catch (error) {
+                console.log('Using default version:', error);
+            }
         }
     </script>
 </div>
