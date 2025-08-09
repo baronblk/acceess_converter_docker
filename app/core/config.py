@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     
     # File upload settings
     MAX_UPLOAD_SIZE: int = 100 * 1024 * 1024  # 100MB
-    UPLOAD_DIR: str = "/app/uploads"
-    EXPORT_DIR: str = "/app/exports"
+    UPLOAD_DIR: str = "/app/data/uploads"
+    EXPORT_DIR: str = "/app/data/exports"
     
     # Job settings
     MAX_CONCURRENT_JOBS: int = 3
@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     
     # Logging settings
     LOG_LEVEL: str = "INFO"
+    LOG_JSON: bool = False
     LOG_FILE: str = "/app/logs/app.log"
     LOG_MAX_SIZE: int = 10 * 1024 * 1024  # 10MB
     LOG_BACKUP_COUNT: int = 5

@@ -56,9 +56,13 @@ logs/
 .tmp/
 .temp/
 
-# Upload directories
-uploads/
-exports/
+# Upload directories (keep structure, ignore content)
+data/uploads/*
+!data/uploads/.gitkeep
+data/exports/*
+!data/exports/.gitkeep
+data/logs/*
+!data/logs/.gitkeep
 temp/
 
 # Docker

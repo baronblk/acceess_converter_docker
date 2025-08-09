@@ -86,7 +86,7 @@ Umgebungsvariablen können in `.env` gesetzt werden:
 ```env
 # Upload-Einstellungen
 MAX_UPLOAD_SIZE=104857600  # 100MB
-UPLOAD_DIR=/app/uploads
+UPLOAD_DIR=/app/data/uploads
 EXPORT_DIR=/app/exports
 
 # Job-Einstellungen
@@ -223,7 +223,7 @@ ls -la /app/lib/
 **Upload-Fehler:**
 ```bash
 # Prüfen Sie Dateiberechtigungen
-chmod 755 /app/uploads
+chmod 755 /app/data/uploads
 # Prüfen Sie Festplattenspeicher
 df -h
 ```
@@ -234,6 +234,58 @@ df -h
 export JAVA_HEAP_SIZE=2048m
 # Oder in der .env Datei
 echo "JAVA_HEAP_SIZE=2048m" >> .env
+```
+
+### Debug-Logging
+
+Das System bietet detailliertes Debug-Logging direkt in die Container-Logs:
+
+```bash
+# Container-Logs in Echtzeit verfolgen
+docker logs -f <container-name>
+
+# Mit Debug-Level starten
+docker run -e LOG_LEVEL=DEBUG -e LOG_JSON=false -p 8000:8000 access-converter
+
+# Log-Level zur Laufzeit ändern
+curl -X POST "http://localhost:8000/diagnostics/loglevel?level=DEBUG"
+
+# Aktuellen Log-Level abrufen
+curl "http://localhost:8000/diagnostics/loglevel"
+```
+
+### Diagnose-Endpoints
+
+Spezielle Endpoints für die Problemdiagnose:
+
+```bash
+# UCanAccess-Systemdiagnose
+curl "http://localhost:8000/diagnostics/ucanaccess"
+
+# Detaillierte Tabellen-Erkennung
+curl "http://localhost:8000/diagnostics/tables?file_id=<job-id>"
+
+# Log-Level Management
+curl "http://localhost:8000/diagnostics/loglevel"
+```
+
+### Debug-Features
+
+- **Request-Tracking**: Jede HTTP-Anfrage erhält eine eindeutige Request-ID
+- **Detailliertes Logging**: Alle JDBC-Verbindungen, Dateioperationen und Tabellen-Entdeckungen werden geloggt
+- **Java-Diagnose**: Automatische Java-Version und JAR-Datei Überprüfung beim Start
+- **Strukturierte Logs**: Wahlweise JSON- oder Human-readable Format
+- **Performance-Monitoring**: Antwortzeiten und Dateigrößen werden mitgeloggt
+
+### Log-Konfiguration
+
+```bash
+# Environment Variables
+LOG_LEVEL=DEBUG          # DEBUG, INFO, WARNING, ERROR, CRITICAL
+LOG_JSON=false           # true für JSON-Format, false für lesbare Logs
+LOG_FILE=/app/logs/app.log
+LOG_MAX_SIZE=10485760    # 10MB
+LOG_BACKUP_COUNT=5
 ```
 
 ### Logs

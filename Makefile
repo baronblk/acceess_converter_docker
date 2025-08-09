@@ -28,9 +28,9 @@ run:
 	docker run -d \
 		--name access-converter \
 		-p 8000:8000 \
-		-v $(PWD)/uploads:/app/uploads \
-		-v $(PWD)/exports:/app/exports \
-		-v $(PWD)/logs:/app/logs \
+		-v $(PWD)/data/uploads:/app/data/uploads \
+		-v $(PWD)/data/exports:/app/data/exports \
+		-v $(PWD)/data/logs:/app/logs \
 		--restart unless-stopped \
 		access-converter:latest
 	@echo "Container started at http://localhost:8000"
@@ -42,9 +42,9 @@ dev:
 		--name access-converter-dev \
 		-p 8000:8000 \
 		-v $(PWD)/app:/app/app \
-		-v $(PWD)/uploads:/app/uploads \
-		-v $(PWD)/exports:/app/exports \
-		-v $(PWD)/logs:/app/logs \
+		-v $(PWD)/data/uploads:/app/data/uploads \
+		-v $(PWD)/data/exports:/app/data/exports \
+		-v $(PWD)/data/logs:/app/logs \
 		-e DEBUG=true \
 		access-converter:latest \
 		python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -92,7 +92,7 @@ status:
 # Create required directories
 init:
 	@echo "Creating required directories..."
-	mkdir -p uploads exports logs
+	mkdir -p data/uploads data/exports data/logs
 	@echo "Directories created"
 
 # Setup development environment

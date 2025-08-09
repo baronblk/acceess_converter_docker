@@ -2,25 +2,78 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.concurrency import run_in_threadpool
 import aiofiles
 import os
 import shutil
 from typing import List, Optional
+from pathlib import Path
 import uuid
 from datetime import datetime
 import zipfile
 import asyncio
+import time
 
 from .core.config import settings
-from .core.logging import setup_logging
+from .core.logging import setup_logging, RequestLoggerAdapter, get_logger
 from .jobs import JobManager, JobStatus
-from .services.ucan import AccessService
+from .services.ucan import AccessService, list_tables_detailed
 from .services.export import ExportService
 from .models import ConversionRequest, JobResponse
 
+def normalize_file_path(old_path: str) -> str:
+    """Normalize file paths for backward compatibility with old upload structure"""
+    if old_path.startswith('/app/uploads/'):
+        # Convert old path to new structure
+        filename = os.path.basename(old_path)
+        return os.path.join(settings.UPLOAD_DIR, filename)
+    return old_path
+
 # Setup logging
 logger = setup_logging()
+
+# Request logging middleware
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Middleware for logging HTTP requests"""
+    
+    async def dispatch(self, request: Request, call_next):
+        # Generate request ID
+        request_id = str(uuid.uuid4())
+        
+        # Create request logger
+        request_logger = RequestLoggerAdapter(get_logger("request"), request_id)
+        
+        # Add request_id to request state for use in endpoints
+        request.state.request_id = request_id
+        request.state.logger = request_logger
+        
+        # Log request start
+        start_time = time.time()
+        request_logger.info(f"{request.method} {request.url.path}")
+        
+        # Process request
+        try:
+            response = await call_next(request)
+            duration = int((time.time() - start_time) * 1000)
+            
+            # Log successful response
+            request_logger.info(
+                f"{request.method} {request.url.path} -> {response.status_code}",
+                extra={'duration': duration}
+            )
+            
+            return response
+            
+        except Exception as e:
+            duration = int((time.time() - start_time) * 1000)
+            
+            # Log error response
+            request_logger.error(
+                f"{request.method} {request.url.path} -> ERROR: {str(e)}",
+                extra={'duration': duration}
+            )
+            raise
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -28,6 +81,9 @@ app = FastAPI(
     description="Convert Access databases to CSV, XLSX, JSON, and PDF formats",
     version="2.0.0"
 )
+
+# Add middleware
+app.add_middleware(RequestLoggingMiddleware)
 
 # Setup templates
 templates = Jinja2Templates(directory="app/templates")
@@ -56,9 +112,18 @@ async def health_check():
 
 @app.get("/diagnostics/ucanaccess")
 async def ucanaccess_diagnostics():
-    """UCanAccess diagnostics endpoint"""
+    """UCanAccess diagnostics endpoint with file system details"""
     try:
         diagnosis = access_service.diagnose_ucanaccess()
+        
+        # Add additional file system info
+        ucanaccess_home = os.environ.get('UCANACCESS_HOME', '/opt/ucanaccess')
+        diagnosis["file_system"] = {
+            "ucanaccess_home": ucanaccess_home,
+            "home_exists": os.path.exists(ucanaccess_home),
+            "home_readable": os.access(ucanaccess_home, os.R_OK) if os.path.exists(ucanaccess_home) else False
+        }
+        
         return {
             "timestamp": datetime.now().isoformat(),
             "diagnosis": diagnosis
@@ -66,6 +131,85 @@ async def ucanaccess_diagnostics():
     except Exception as e:
         logger.error(f"Diagnostics error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Diagnostics failed: {str(e)}")
+
+
+@app.get("/diagnostics/tables")
+async def diagnostics_tables(file_id: str):
+    """Enhanced diagnostics for table discovery in Access database"""
+    try:
+        # Find the database file by job ID
+        job = job_manager.get_job(file_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        if job.status != JobStatus.UPLOADED:
+            raise HTTPException(status_code=400, detail="File not ready for table analysis")
+        
+        file_path = Path(normalize_file_path(job.file_path))
+        
+        # File details
+        file_stats = {
+            "name": file_path.name,
+            "size_mb": os.path.getsize(file_path) / (1024 * 1024),
+            "modified": datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat(),
+            "exists": os.path.exists(file_path),
+            "readable": os.access(file_path, os.R_OK)
+        }
+        
+        # Get detailed table information
+        detailed_tables = await run_in_threadpool(list_tables_detailed, file_path)
+        
+        # Group by source
+        by_source = {}
+        for table in detailed_tables:
+            source = table["source"]
+            if source not in by_source:
+                by_source[source] = []
+            by_source[source].append(table)
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "file": file_stats,
+            "table_discovery": {
+                "total_count": len(detailed_tables),
+                "by_source": {k: len(v) for k, v in by_source.items()},
+                "by_type": {}
+            },
+            "tables": detailed_tables
+        }
+        
+    except Exception as e:
+        logger.error(f"Table diagnostics error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Table diagnostics failed: {str(e)}")
+
+
+@app.get("/diagnostics/loglevel")
+async def get_log_level():
+    """Get current log level"""
+    import logging
+    current_level = logging.getLogger().level
+    level_name = logging.getLevelName(current_level)
+    return {
+        "current_level": level_name,
+        "available_levels": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+    }
+
+
+@app.post("/diagnostics/loglevel")
+async def set_log_level_endpoint(level: str):
+    """Set log level at runtime (for development)"""
+    try:
+        from .core.logging import set_log_level
+        success = set_log_level(level)
+        
+        if success:
+            return {"message": f"Log level set to {level.upper()}", "success": True}
+        else:
+            raise HTTPException(status_code=400, detail=f"Invalid log level: {level}")
+            
+    except Exception as e:
+        logger.error(f"Failed to set log level: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to set log level: {str(e)}")
 
 
 @app.post("/upload", response_model=JobResponse)
@@ -89,9 +233,10 @@ async def upload_database(file: UploadFile = File(...)):
             content = await file.read()
             await f.write(content)
         
-        # Create job
+        # Create job with normalized path
         filename = file.filename or "unknown.accdb"
-        job_manager.create_job(job_id, file_path, filename)
+        normalized_file_path = normalize_file_path(file_path)
+        job_manager.create_job(job_id, normalized_file_path, filename)
         
         logger.info(f"File uploaded successfully: {filename} (Job ID: {job_id})")
         
@@ -118,8 +263,9 @@ async def get_tables(job_id: str):
         if job.status != JobStatus.UPLOADED:
             raise HTTPException(status_code=400, detail="File not ready for table listing")
         
-        # Extract tables using Access service
-        tables = await run_in_threadpool(access_service.get_tables, job.file_path)
+        # Extract tables using Access service with normalized path
+        normalized_path = normalize_file_path(job.file_path)
+        tables = await run_in_threadpool(access_service.get_tables, normalized_path)
         
         # Update job status
         job_manager.update_job_tables(job_id, tables)
@@ -246,7 +392,8 @@ async def _process_conversion(job_id: str, selected_tables: List[str], export_fo
         
         # Get data from Access database
         job_manager.update_job_progress(job_id, 10, "Reading database...")
-        data = await run_in_threadpool(access_service.get_table_data, job.file_path, selected_tables)
+        normalized_path = normalize_file_path(job.file_path)
+        data = await run_in_threadpool(access_service.get_table_data, normalized_path, selected_tables)
         
         # Export data based on format
         job_manager.update_job_progress(job_id, 50, "Converting data...")
@@ -282,10 +429,70 @@ async def _process_conversion(job_id: str, selected_tables: List[str], export_fo
 
 @app.on_event("startup")
 async def startup_event():
-    """Application startup"""
+    """Application startup with detailed diagnostics"""
     logger.info("Access Database Converter started")
     logger.info(f"Upload directory: {settings.UPLOAD_DIR}")
     logger.info(f"Export directory: {settings.EXPORT_DIR}")
+    
+    # Java diagnostics
+    await _log_java_diagnostics()
+    
+    # UCanAccess diagnostics
+    await _log_ucanaccess_diagnostics()
+
+
+async def _log_java_diagnostics():
+    """Log Java version and configuration"""
+    try:
+        import subprocess
+        result = await run_in_threadpool(
+            subprocess.run, 
+            ["java", "-version"], 
+            capture_output=True, 
+            text=True
+        )
+        if result.returncode == 0:
+            java_version = result.stderr.split('\n')[0] if result.stderr else "Unknown"
+            logger.info(f"Java version: {java_version}")
+        else:
+            logger.error("Java not found or not working")
+    except Exception as e:
+        logger.error(f"Failed to check Java version: {e}")
+
+
+async def _log_ucanaccess_diagnostics():
+    """Log UCanAccess JAR files and configuration"""
+    ucanaccess_home = os.environ.get('UCANACCESS_HOME', '/opt/ucanaccess')
+    logger.info(f"UCANACCESS_HOME: {ucanaccess_home}")
+    
+    required_jars = [
+        "ucanaccess-5.0.1.jar",
+        "lib/commons-lang3-3.8.1.jar", 
+        "lib/commons-logging-1.2.jar",
+        "lib/hsqldb-2.5.0.jar",
+        "lib/jackcess-3.0.1.jar"
+    ]
+    
+    found_jars = []
+    missing_jars = []
+    
+    for jar in required_jars:
+        jar_path = os.path.join(ucanaccess_home, jar)
+        if os.path.exists(jar_path):
+            size_mb = os.path.getsize(jar_path) / (1024 * 1024)
+            found_jars.append(f"{jar} ({size_mb:.1f}MB)")
+            logger.debug(f"Found JAR: {jar_path} ({size_mb:.1f}MB)")
+        else:
+            missing_jars.append(jar)
+            logger.warning(f"Missing JAR: {jar_path}")
+    
+    logger.info(f"Found JARs ({len(found_jars)}): {', '.join(found_jars)}")
+    
+    if missing_jars:
+        logger.error(f"Missing JARs ({len(missing_jars)}): {', '.join(missing_jars)}")
+        logger.error("UCanAccess may not work properly without these JARs")
+    else:
+        logger.info("All required UCanAccess JARs found")
 
 
 @app.on_event("shutdown")
@@ -295,8 +502,9 @@ async def shutdown_event():
     # Clean up temp files
     try:
         for job_id, job in job_manager.jobs.items():
-            if os.path.exists(job.file_path):
-                os.remove(job.file_path)
+            normalized_path = normalize_file_path(job.file_path)
+            if os.path.exists(normalized_path):
+                os.remove(normalized_path)
     except Exception as e:
         logger.error(f"Cleanup error: {str(e)}")
 

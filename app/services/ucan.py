@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import logging
 from pathlib import Path
@@ -6,7 +7,9 @@ import pandas as pd
 import jaydebeapi
 import glob
 
-logger = logging.getLogger("accdb_web.ucan")
+from ..core.logging import get_logger
+
+logger = get_logger("ucan")
 
 # UCanAccess Driver Class
 DRIVER_CLASS = "net.ucanaccess.jdbc.UcanaccessDriver"
@@ -103,6 +106,13 @@ def connect(db_path: Path):
         # Validate database file
         db_path = _ensure_file(db_path)
         
+        # Log database file details
+        file_size_mb = os.path.getsize(db_path) / (1024 * 1024)
+        logger.info(f"Database file: {db_path}")
+        logger.info(f"File size: {file_size_mb:.2f}MB")
+        logger.info(f"File exists: {os.path.exists(db_path)}")
+        logger.info(f"File readable: {os.access(db_path, os.R_OK)}")
+        
         # Collect JAR files
         found_jars, missing_jars = _collect_ucan_jars()
         
@@ -110,15 +120,20 @@ def connect(db_path: Path):
             logger.warning(f"Missing JAR files: {missing_jars}")
         
         if not found_jars:
+            logger.error("No UCanAccess JAR files found")
             raise RuntimeError("No UCanAccess JAR files found")
+        
+        logger.info(f"Found {len(found_jars)} JAR files")
+        logger.debug(f"JAR files: {found_jars}")
         
         # Build JDBC URL
         jdbc_url = _jdbc_url(db_path)
         
-        logger.info(f"Connecting to: {jdbc_url}")
-        logger.debug(f"Using JAR files: {found_jars}")
+        logger.info(f"JDBC URL: {jdbc_url}")
+        logger.debug(f"Driver class: {DRIVER_CLASS}")
         
         # Connect with explicit JAR loading
+        logger.debug("Attempting JDBC connection...")
         conn = jaydebeapi.connect(
             DRIVER_CLASS,
             jdbc_url,
@@ -126,17 +141,188 @@ def connect(db_path: Path):
             jars=found_jars
         )
         
-        logger.info("Successfully connected to Access database")
+        logger.info("JDBC connection established successfully")
         return conn
         
     except Exception as e:
-        logger.error(f"Connection failed: {e}")
+        logger.exception(f"Failed to connect to database {db_path}: {str(e)}")
         raise
+
+
+def _info_schema_tables(conn) -> List[str]:
+    """
+    Versuche Tabellen über INFORMATION_SCHEMA zu finden.
+    
+    Returns:
+        Liste der Tabellennamen aus INFORMATION_SCHEMA
+    """
+    cursor = conn.cursor()
+    names: List[str] = []
+    
+    # Versuche zuerst INFORMATION_SCHEMA.TABLES
+    try:
+        cursor.execute("""
+            SELECT TABLE_NAME, TABLE_TYPE 
+            FROM INFORMATION_SCHEMA.TABLES 
+            WHERE TABLE_TYPE IN ('TABLE', 'VIEW')
+            AND TABLE_SCHEMA = 'PUBLIC'
+            ORDER BY TABLE_NAME
+        """)
+        rows = cursor.fetchall()
+        for row in rows:
+            name = str(row[0]) if row[0] else ""
+            if name:
+                names.append(name)
+        logger.debug(f"Found {len(names)} tables via INFORMATION_SCHEMA.TABLES")
+        return names
+    except Exception as e:
+        logger.debug(f"INFORMATION_SCHEMA.TABLES failed: {e}")
+    
+    # Fallback: INFORMATION_SCHEMA.SYSTEM_TABLES (ältere UCanAccess)
+    try:
+        cursor.execute("""
+            SELECT TABLE_NAME, TABLE_TYPE 
+            FROM INFORMATION_SCHEMA.SYSTEM_TABLES 
+            WHERE TABLE_TYPE IN ('TABLE', 'VIEW')
+            ORDER BY TABLE_NAME
+        """)
+        rows = cursor.fetchall()
+        for row in rows:
+            name = str(row[0]) if row[0] else ""
+            if name:
+                names.append(name)
+        logger.debug(f"Found {len(names)} tables via INFORMATION_SCHEMA.SYSTEM_TABLES")
+    except Exception as e:
+        logger.debug(f"INFORMATION_SCHEMA.SYSTEM_TABLES failed: {e}")
+    
+    return names
+
+
+def _metadata_tables(conn) -> List[Tuple[str, str]]:
+    """
+    Nutzt JDBC DatabaseMetaData.getTables() über jaydebeapi.
+    
+    Returns:
+        Liste von (table_name, table_type) Tupeln
+    """
+    names: List[Tuple[str, str]] = []
+    
+    try:
+        # Zugriff auf die Java-Connection für JDBC-Metadaten
+        jconn = conn.jconn  # jaydebeapi Java-Connection
+        metadata = jconn.getMetaData()
+        
+        # Hole alle Tabellen-Typen
+        table_types = ["TABLE", "SYSTEM TABLE", "VIEW", "ALIAS", "SYNONYM"]
+        result_set = metadata.getTables(None, None, "%", table_types)
+        
+        while result_set.next():
+            table_name = result_set.getString(3)  # TABLE_NAME (Spalte 3)
+            table_type = result_set.getString(4)  # TABLE_TYPE (Spalte 4)
+            
+            if table_name:
+                names.append((str(table_name), str(table_type) if table_type else "UNKNOWN"))
+        
+        result_set.close()
+        logger.debug(f"Found {len(names)} tables via JDBC metadata")
+        
+    except Exception as e:
+        logger.warning(f"JDBC metadata getTables() failed: {e}")
+    
+    return names
+
+
+def list_tables_detailed(db_path: Path) -> List[Dict[str, str]]:
+    """
+    Liefert detaillierte Liste inkl. Quelle (info_schema|metadata) und Typ.
+    
+    Args:
+        db_path: Path to the Access database file
+        
+    Returns:
+        Liste von Dictionaries mit name, type, source
+    """
+    db_path = Path(db_path).resolve()
+    logger.info(f"Starting table discovery for: {db_path}")
+    
+    conn = connect(db_path)
+    
+    try:
+        # Schritt A: Versuche INFORMATION_SCHEMA
+        logger.debug("Attempting INFORMATION_SCHEMA table discovery...")
+        info_tables = _info_schema_tables(conn)
+        info_filtered = [name for name in info_tables if not name.upper().startswith("MSYS")]
+        info_set = set(info_filtered)
+        
+        logger.info(f"INFORMATION_SCHEMA: found {len(info_tables)} total, {len(info_filtered)} after filtering")
+        if info_filtered:
+            sample_tables = info_filtered[:5]
+            logger.debug(f"INFORMATION_SCHEMA sample tables: {sample_tables}")
+        
+        # Schritt B: Fallback mit JDBC Metadata
+        logger.debug("Attempting JDBC Metadata table discovery...")
+        meta_pairs = _metadata_tables(conn)
+        meta_filtered = [(name, table_type) for (name, table_type) in meta_pairs 
+                        if not name.upper().startswith("MSYS")]
+        
+        logger.info(f"JDBC Metadata: found {len(meta_pairs)} total, {len(meta_filtered)} after filtering")
+        if meta_filtered:
+            sample_meta = [(name, ttype) for name, ttype in meta_filtered[:5]]
+            logger.debug(f"JDBC Metadata sample tables: {sample_meta}")
+        
+        info_count = len(info_filtered)
+        metadata_count = len(meta_filtered)
+        
+        logger.info(f"Table discovery summary: info_schema={info_count}, metadata={metadata_count}")
+        
+        # Kombiniere Ergebnisse
+        detailed_tables: List[Dict[str, str]] = []
+        
+        # Füge INFORMATION_SCHEMA Tabellen hinzu
+        for name in sorted(info_set):
+            detailed_tables.append({
+                "name": name,
+                "type": "TABLE",  # INFORMATION_SCHEMA hat oft keinen spezifischen Typ
+                "source": "info_schema"
+            })
+        
+        # Füge Metadata-Tabellen hinzu (nur wenn nicht schon in info_schema vorhanden)
+        for name, table_type in meta_filtered:
+            if name not in info_set:
+                detailed_tables.append({
+                    "name": name,
+                    "type": table_type or "UNKNOWN",
+                    "source": "metadata"
+                })
+        
+        final_count = len(detailed_tables)
+        logger.info(f"Final result: {final_count} unique tables found")
+        
+        if final_count == 0:
+            logger.warning(
+                f"No tables found in {db_path.name}! "
+                "Possible causes: corrupted database, linked tables, permissions issues, or unsupported format. "
+                "Try /diagnostics/tables endpoint for detailed analysis."
+            )
+        else:
+            # Log sample of found tables
+            sample_names = [t["name"] for t in detailed_tables[:5]]
+            logger.info(f"Sample tables: {sample_names}")
+        
+        return detailed_tables
+        
+    except Exception as e:
+        logger.exception(f"Table discovery failed for {db_path}: {str(e)}")
+        raise
+        
+    finally:
+        conn.close()
 
 
 def list_tables(db_path: Path) -> List[str]:
     """
-    List all user tables in the Access database.
+    Kompakte Liste der Tabellen (Systemtabellen MSYS* ausgeschlossen).
+    Nutzt zuerst INFORMATION_SCHEMA, dann Metadaten-Fallback.
     
     Args:
         db_path: Path to the Access database file
@@ -145,35 +331,12 @@ def list_tables(db_path: Path) -> List[str]:
         List of table names
     """
     try:
-        db_path = Path(db_path)
-        conn = connect(db_path)
+        detailed_tables = list_tables_detailed(db_path)
+        unique_names = sorted({table["name"] for table in detailed_tables})
         
-        try:
-            cursor = conn.cursor()
-            
-            # Get database metadata
-            cursor.execute("""
-                SELECT TABLE_NAME 
-                FROM INFORMATION_SCHEMA.TABLES 
-                WHERE TABLE_TYPE = 'TABLE' 
-                AND TABLE_SCHEMA = 'PUBLIC'
-                ORDER BY TABLE_NAME
-            """)
-            
-            tables = [row[0] for row in cursor.fetchall()]
-            
-            # Filter out system tables
-            user_tables = [
-                table for table in tables 
-                if not table.upper().startswith(('MSY', 'USY', '~TMP'))
-            ]
-            
-            logger.info(f"Found {len(user_tables)} user tables in {db_path.name}")
-            return user_tables
-            
-        finally:
-            conn.close()
-            
+        logger.info(f"Found {len(unique_names)} user tables in {db_path.name}")
+        return unique_names
+        
     except Exception as e:
         logger.error(f"Failed to list tables: {e}")
         raise
@@ -192,23 +355,38 @@ def read_table(db_path: Path, table_name: str) -> pd.DataFrame:
     """
     try:
         db_path = Path(db_path)
+        logger.info(f"Reading table '{table_name}' from {db_path}")
+        
         conn = connect(db_path)
         
         try:
             # Use pandas to read the SQL query
             query = f'SELECT * FROM "{table_name}"'
-            logger.info(f"Reading table: {table_name}")
+            logger.debug(f"Executing query: {query}")
             
             df = pd.read_sql_query(query, conn)
             
-            logger.info(f"Read {len(df)} rows from table {table_name}")
+            # Log detailed table info
+            row_count = len(df)
+            col_count = len(df.columns)
+            logger.info(f"Table '{table_name}': {row_count} rows, {col_count} columns")
+            
+            if col_count > 0:
+                column_names = list(df.columns)[:10]  # First 10 columns
+                logger.debug(f"Columns: {column_names}")
+                
+            if row_count > 0:
+                # Log sample data types and memory usage
+                memory_mb = df.memory_usage(deep=True).sum() / (1024 * 1024)
+                logger.debug(f"Memory usage: {memory_mb:.2f}MB")
+            
             return df
             
         finally:
             conn.close()
             
     except Exception as e:
-        logger.error(f"Failed to read table {table_name}: {e}")
+        logger.exception(f"Failed to read table '{table_name}' from {db_path}: {str(e)}")
         raise
 
 
