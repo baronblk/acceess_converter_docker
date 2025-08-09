@@ -421,10 +421,18 @@ async def _process_conversion(job_id: str, selected_tables: List[str], export_fo
         
         logger.info(f"Conversion completed for job {job_id}")
         
+    except ValueError as e:
+        # Handle validation errors (e.g., invalid table names)
+        error_msg = f"Validation error: {str(e)}"
+        logger.error(f"Validation error for job {job_id}: {str(e)}")
+        job_manager.update_job_status(job_id, JobStatus.FAILED)
+        job_manager.update_job_progress(job_id, 0, error_msg)
     except Exception as e:
+        # Handle all other errors
+        error_msg = f"Conversion failed: {str(e)}"
         logger.error(f"Conversion error for job {job_id}: {str(e)}")
         job_manager.update_job_status(job_id, JobStatus.FAILED)
-        job_manager.update_job_progress(job_id, 0, f"Conversion failed: {str(e)}")
+        job_manager.update_job_progress(job_id, 0, error_msg)
 
 
 @app.on_event("startup")

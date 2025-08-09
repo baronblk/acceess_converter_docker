@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 import logging
+import re
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
 import pandas as pd
@@ -13,6 +14,44 @@ logger = get_logger("ucan")
 
 # UCanAccess Driver Class
 DRIVER_CLASS = "net.ucanaccess.jdbc.UcanaccessDriver"
+
+
+def validate_table_name(table_name: str) -> bool:
+    """
+    Validate table name to prevent SQL injection.
+    Allows alphanumeric characters, underscores, hyphens, and spaces.
+    
+    Args:
+        table_name: Name of the table to validate
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    if not table_name:
+        return False
+    
+    # Allow alphanumeric characters, underscores, hyphens, and spaces
+    # This pattern matches typical Access table names
+    # Access allows spaces and many special characters in table names
+    pattern = r'^[A-Za-z0-9_\-\s]+$'
+    return bool(re.match(pattern, table_name)) and len(table_name.strip()) > 0
+
+
+def format_table_name_for_ucanaccess(table_name: str) -> str:
+    """
+    Format table name for UCanAccess SQL queries.
+    UCanAccess requires table names to be wrapped in square brackets [].
+    
+    Args:
+        table_name: Raw table name
+        
+    Returns:
+        Formatted table name wrapped in square brackets
+    """
+    if not validate_table_name(table_name):
+        raise ValueError(f"Invalid table name: '{table_name}'. Only alphanumeric characters, underscores, hyphens, and spaces are allowed.")
+    
+    return f"[{table_name}]"
 
 
 def _ucan_home() -> Path:
@@ -352,17 +391,30 @@ def read_table(db_path: Path, table_name: str) -> pd.DataFrame:
         
     Returns:
         pandas DataFrame containing the table data
+        
+    Raises:
+        ValueError: If table name is invalid
+        Exception: If database read fails
     """
     try:
         db_path = Path(db_path)
         logger.info(f"Reading table '{table_name}' from {db_path}")
         
+        # Validate table name to prevent SQL injection
+        if not validate_table_name(table_name):
+            error_msg = f"Invalid table name: '{table_name}'. Only alphanumeric characters, underscores, and hyphens are allowed."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
         conn = connect(db_path)
         
         try:
-            # Use pandas to read the SQL query
-            query = f'SELECT * FROM "{table_name}"'
-            logger.debug(f"Executing query: {query}")
+            # Format table name for UCanAccess (use square brackets)
+            formatted_table_name = format_table_name_for_ucanaccess(table_name)
+            query = f'SELECT * FROM {formatted_table_name}'
+            
+            # Log the actual SQL query being executed
+            logger.info(f"Executing SQL query: {query}")
             
             df = pd.read_sql_query(query, conn)
             
@@ -380,11 +432,15 @@ def read_table(db_path: Path, table_name: str) -> pd.DataFrame:
                 memory_mb = df.memory_usage(deep=True).sum() / (1024 * 1024)
                 logger.debug(f"Memory usage: {memory_mb:.2f}MB")
             
+            logger.info(f"Successfully read table '{table_name}' with {row_count} rows")
             return df
             
         finally:
             conn.close()
             
+    except ValueError as e:
+        # Re-raise validation errors as-is
+        raise
     except Exception as e:
         logger.exception(f"Failed to read table '{table_name}' from {db_path}: {str(e)}")
         raise

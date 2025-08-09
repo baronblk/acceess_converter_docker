@@ -1,93 +1,109 @@
 <!DOCTYPE html>
 <html lang="de" data-theme="emerald">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tabellen auswählen - Access Database Converter</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
-    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        html { 
-            height: 100%;
-            overflow-y: scroll;
-        }
-        body { 
-            height: auto;
-            min-height: 100vh;
-            overflow-y: visible;
-        }
-        .glass-card {
-            background: rgba(255, 255, 255, 0.25);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        .table-card {
-            transition: all 0.3s ease;
-        }
-        .table-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-        }
-        .table-card.selected {
-            border-color: #10b981;
-            background-color: rgba(16, 185, 129, 0.1);
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tabellen auswählen - Access Database Converter</title>
+
+  <!-- Tailwind/Daisy (CDN nur für Dev) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css"/>
+  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+
+  <style>
+    /* Seite darf IMMER vertikal scrollen (kein Overflow-Lock) */
+    html { height: auto; min-height: 100%; overflow-y: auto; }
+    body { min-height: 100vh; overflow-y: auto; }
+    html, body, main, .container { overflow-y: auto !important; }
+
+    .glass-card {
+      background: rgba(255,255,255,.25);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,.2);
+    }
+    .table-card { transition: all .3s ease; }
+    .table-card:hover { transform: translateY(-2px); box-shadow: 0 20px 25px -5px rgba(0,0,0,.1); }
+    .table-card.selected { border-color:#10b981; background-color: rgba(16,185,129,.1); }
+  </style>
 </head>
-<body class="bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">
-    <!-- Navigation -->
-    <nav class="navbar glass-card shadow-lg mb-8">
-        <div class="navbar-start">
-            <div class="text-xl font-bold text-emerald-700">
-                <i class="fas fa-database mr-2"></i>
-                Access Converter
-            </div>
-        </div>
-        <div class="navbar-end">
-            <div class="badge badge-emerald">v2.0</div>
-        </div>
-    </nav>
 
-    <!-- Main Content -->
-    <div class="container mx-auto px-4 py-8 max-w-6xl" x-data="tableSelector()">
-        <!-- Header -->
-        <div class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-gray-800 mb-4">
-                <span class="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
-                    Tabellen auswählen
-                </span>
-            </h1>
-            <p class="text-lg text-gray-600">
-                Wählen Sie die Tabellen aus, die konvertiert werden sollen
-            </p>
-        </div>
-
-        <!-- Database Info -->
-        <div class="card glass-card shadow-lg mb-8">
-            <div class="card-body">
-                <h2 class="card-title text-emerald-700">
-                    <i class="fas fa-file-database mr-2"></i>
-                    Datenbank: {{ job.original_filename }}
-                </h2>
-                <p class="text-gray-600">
-                    Gefundene Tabellen: <span class="font-semibold">{{ job.tables|length }}</span>
-                </p>
-            </div>
-        </div>
-
-        <!-- Rest of content here... -->
-        <div class="text-center">
-            <p class="text-gray-600">Tabellenseite wird geladen...</p>
-        </div>
+<body class="bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 min-h-screen flex flex-col">
+  <!-- Navigation (sticky) -->
+  <nav class="navbar glass-card shadow-lg sticky top-0 z-50">
+    <div class="navbar-start">
+      <div class="text-xl font-bold text-emerald-700">
+        <i class="fas fa-database mr-2"></i> Access Converter
+      </div>
     </div>
-    
-    <!-- Footer -->
-    <footer class="footer footer-center p-4 glass-card text-base-content mt-12">
-        <div>
-            <p>Copyright © 2024 - Access Database Converter v2.0</p>
+    <div class="navbar-end">
+      <div class="badge badge-emerald">v2.0</div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="container mx-auto px-4 py-8 max-w-6xl flex-1">
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <h1 class="text-4xl font-bold text-gray-800 mb-4">
+        <span class="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+          Tabellen auswählen
+        </span>
+      </h1>
+      <p class="text-lg text-gray-600">Wählen Sie die Tabellen aus, die konvertiert werden sollen</p>
+    </div>
+
+    <!-- Database Info -->
+    <div class="card glass-card shadow-lg mb-8 overflow-visible">
+      <div class="card-body">
+        <h2 class="card-title text-emerald-700">
+          <i class="fas fa-file-database mr-2"></i>
+          Datenbank: {{ job.original_filename }}
+        </h2>
+        <p class="text-gray-600">Gefundene Tabellen:
+          <span class="font-semibold">{{ job.tables|length }}</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Controls (sticky) -->
+    <div x-data="tableSelector()">
+      <div class="sticky top-20 z-10 bg-base-100/70 backdrop-blur rounded-xl p-4 shadow mb-4">
+        <div class="flex items-center gap-3 justify-between">
+          <div class="flex gap-2">
+            <button class="btn btn-success btn-sm">Alle auswählen</button>
+            <button class="btn btn-ghost btn-sm">Alle abwählen</button>
+          </div>
+          <div>
+            <label class="label-text mr-2">Export-Format:</label>
+            <select class="select select-bordered select-sm">
+              <option>CSV (Comma Separated)</option>
+              <option>Excel (XLSX)</option>
+              <option>JSON</option>
+              <option>PDF</option>
+            </select>
+          </div>
         </div>
-    </footer>
+      </div>
+
+      <!-- Tabellenliste: KEIN innerer Scroll mehr (max-h/overflow-y entfernt) -->
+      <div class="mt-4">
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- … deine Tabellencards … -->
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer footer-center p-4 glass-card text-base-content mt-12">
+    <div>
+      <p>Copyright © 2024 - Access Database Converter v2.0</p>
+    </div>
+  </footer>
+
+  <script>
+    function tableSelector(){ return { /* deine Logik */ }; }
+  </script>
 </body>
 </html>
