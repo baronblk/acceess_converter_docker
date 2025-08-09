@@ -19,7 +19,7 @@ DRIVER_CLASS = "net.ucanaccess.jdbc.UcanaccessDriver"
 def validate_table_name(table_name: str) -> bool:
     """
     Validate table name to prevent SQL injection.
-    Allows alphanumeric characters, underscores, hyphens, and spaces.
+    Allows alphanumeric characters, underscores, hyphens, spaces, and international characters (including German umlauts).
     
     Args:
         table_name: Name of the table to validate
@@ -30,10 +30,10 @@ def validate_table_name(table_name: str) -> bool:
     if not table_name:
         return False
     
-    # Allow alphanumeric characters, underscores, hyphens, and spaces
-    # This pattern matches typical Access table names
+    # Allow alphanumeric characters (including international), underscores, hyphens, and spaces
+    # This pattern matches typical Access table names including German umlauts (ä, ö, ü, ß)
     # Access allows spaces and many special characters in table names
-    pattern = r'^[A-Za-z0-9_\-\s]+$'
+    pattern = r'^[A-Za-z0-9_\-\s\u00C0-\u017F\u00DF\u00E4\u00F6\u00FC\u00C4\u00D6\u00DC]+$'
     return bool(re.match(pattern, table_name)) and len(table_name.strip()) > 0
 
 
