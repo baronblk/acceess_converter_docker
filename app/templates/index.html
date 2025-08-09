@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="emerald">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Database Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .upload-area {
+            transition: all 0.3s ease;
+        }
+        .upload-area:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .upload-area.dragover {
+            border-color: #10b981;
+            background-color: rgba(16, 185, 129, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">
+    <!-- Navigation -->
+    <nav class="navbar glass-card shadow-lg mb-8">
+        <div class="navbar-start">
+            <div class="text-xl font-bold text-emerald-700">
+                <i class="fas fa-database mr-2"></i>
+                Access Converter
+            </div>
+        </div>
+        <div class="navbar-end">
+            <div class="badge badge-emerald">v2.0</div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <!-- Hero Section -->
+        <div class="text-center mb-12">
+            <h1 class="text-5xl font-bold text-gray-800 mb-4">
+                <span class="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                    Database Converter
+                </span>
+            </h1>
+            <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+                Konvertieren Sie Access-Datenbanken (.mdb/.accdb) einfach und schnell in 
+                CSV, Excel, JSON oder PDF Formate - ohne Windows erforderlich.
+            </p>
+        </div>
+
+        <!-- Upload Card -->
+        <div class="card glass-card shadow-xl mb-8" 
+             x-data="uploadCtl()" 
+             data-max-mb="100"
+             data-allowed-ext=".mdb,.accdb">
+            <div class="card-body">
+                <h2 class="card-title text-2xl text-emerald-700 mb-6">
+                    <i class="fas fa-cloud-upload-alt mr-2"></i>
+                    Datei hochladen
+                </h2>
+
+                <!-- Upload Area -->
+                <div class="upload-area border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
+                     role="button"
+                     tabindex="0"
+                     aria-label="Datei-Upload-Bereich. Klicken oder Enter drücken um Dateidialog zu öffnen, oder Datei hierher ziehen"
+                     @dragover.prevent="onDragOver()"
+                     @dragenter.prevent="onDragOver()"
+                     @dragleave.prevent="onDragLeave()"
+                     @drop.prevent="onDrop($event)"
+                     @click="onClick()"
+                     @keydown="onKey($event)"
+                     :class="{ 
+                         'border-emerald-500 bg-emerald-50 bg-opacity-50': dragging,
+                         'ring-2 ring-emerald-300 ring-opacity-50': dragging 
+                     }">
+                    
+                    <div x-show="!file" class="space-y-4">
+                        <i class="fas fa-cloud-upload-alt text-6xl text-emerald-500" 
+                           :class="{ 'animate-bounce': dragging }"></i>
+                        <div>
+                            <p class="text-xl font-semibold text-gray-700">
+                                Ziehen Sie Ihre Access-Datei hierher
+                            </p>
+                            <p class="text-gray-500 mt-2">
+                                oder klicken Sie zum Durchsuchen
+                            </p>
+                            <p class="text-sm text-gray-400 mt-2">
+                                Unterstützte Formate: .mdb, .accdb (max. <span x-text="maxSizeMB"></span>MB)
+                            </p>
+                        </div>
+                    </div>
+
+                    <div x-show="file" class="space-y-4">
+                        <i class="fas fa-file-database text-6xl text-emerald-500"></i>
+                        <div>
+                            <p class="text-xl font-semibold text-gray-700" x-text="file?.name"></p>
+                            <p class="text-gray-500" x-text="formatFileSize(file?.size)"></p>
+                        </div>
+                        <button type="button" 
+                                @click.stop="reset()"
+                                class="btn btn-ghost btn-sm text-red-500 hover:text-red-700"
+                                aria-label="Datei entfernen">
+                            <i class="fas fa-times mr-1"></i>
+                            Entfernen
+                        </button>
+                    </div>
+
+                    <!-- Hidden file input -->
+                    <label class="sr-only" for="fileInput">
+                        Access-Datenbank auswählen (.mdb oder .accdb Datei, maximal <span x-text="maxSizeMB"></span>MB)
+                    </label>
+                    <input type="file" 
+                           id="fileInput"
+                           x-ref="fileInput"
+                           @change="onChange($event)"
+                           accept=".mdb,.accdb"
+                           class="hidden"
+                           aria-describedby="upload-status">
+                </div>
+
+                <!-- Upload Button -->
+                <div class="card-actions justify-center mt-6">
+                    <button @click="submit()" 
+                            :disabled="!file || uploading"
+                            class="btn btn-primary btn-lg px-8 transition-all"
+                            :class="{ 
+                                'loading': uploading,
+                                'btn-disabled opacity-50 cursor-not-allowed': !file && !uploading 
+                            }"
+                            :aria-label="uploading ? 'Upload läuft, bitte warten' : 'Datei hochladen'">
+                        <i class="fas fa-upload mr-2" x-show="!uploading"></i>
+                        <i class="fas fa-spinner fa-spin mr-2" x-show="uploading"></i>
+                        <span x-text="uploading ? 'Wird hochgeladen...' : 'Datei hochladen'"></span>
+                    </button>
+                </div>
+
+                <!-- Progress Bar -->
+                <div x-show="uploading && progress > 0" class="mt-4">
+                    <div class="flex justify-between text-sm text-gray-600 mb-1">
+                        <span>Upload läuft...</span>
+                        <span x-text="progress + '%'"></span>
+                    </div>
+                    <progress class="progress progress-primary w-full" 
+                              :value="progress" 
+                              max="100"
+                              :aria-label="'Upload-Fortschritt: ' + progress + ' Prozent'"></progress>
+                </div>
+
+                <!-- Status Messages -->
+                <div id="upload-status" 
+                     class="mt-4" 
+                     aria-live="polite" 
+                     aria-atomic="true">
+                    <!-- Error Display -->
+                    <div x-show="error" class="alert alert-error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span x-text="error"></span>
+                        <button @click="error = null" 
+                                class="btn btn-ghost btn-sm"
+                                aria-label="Fehlermeldung schließen">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Success Message -->
+                    <div x-show="success && !error" class="alert alert-success">
+                        <i class="fas fa-check-circle"></i>
+                        <span x-text="success"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Features Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            <div class="card glass-card shadow-lg">
+                <div class="card-body text-center">
+                    <i class="fas fa-file-csv text-3xl text-emerald-500 mb-3"></i>
+                    <h3 class="font-bold text-lg">CSV Export</h3>
+                    <p class="text-sm text-gray-600">Kompatibel mit Excel und anderen Tools</p>
+                </div>
+            </div>
+            <div class="card glass-card shadow-lg">
+                <div class="card-body text-center">
+                    <i class="fas fa-file-excel text-3xl text-green-500 mb-3"></i>
+                    <h3 class="font-bold text-lg">Excel Export</h3>
+                    <p class="text-sm text-gray-600">Mehrere Arbeitsblätter in einer Datei</p>
+                </div>
+            </div>
+            <div class="card glass-card shadow-lg">
+                <div class="card-body text-center">
+                    <i class="fas fa-code text-3xl text-blue-500 mb-3"></i>
+                    <h3 class="font-bold text-lg">JSON Export</h3>
+                    <p class="text-sm text-gray-600">Strukturierte Daten für APIs</p>
+                </div>
+            </div>
+            <div class="card glass-card shadow-lg">
+                <div class="card-body text-center">
+                    <i class="fas fa-file-pdf text-3xl text-red-500 mb-3"></i>
+                    <h3 class="font-bold text-lg">PDF Export</h3>
+                    <p class="text-sm text-gray-600">Druckfertige Berichte</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Section -->
+        <div class="card glass-card shadow-xl">
+            <div class="card-body">
+                <h3 class="card-title text-xl text-emerald-700 mb-4">
+                    <i class="fas fa-info-circle mr-2"></i>
+                    So funktioniert es
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="text-center">
+                        <div class="bg-emerald-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3">
+                            <span class="text-2xl font-bold text-emerald-600">1</span>
+                        </div>
+                        <h4 class="font-semibold mb-2">Datei hochladen</h4>
+                        <p class="text-sm text-gray-600">Laden Sie Ihre .mdb oder .accdb Datei hoch</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-emerald-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3">
+                            <span class="text-2xl font-bold text-emerald-600">2</span>
+                        </div>
+                        <h4 class="font-semibold mb-2">Tabellen auswählen</h4>
+                        <p class="text-sm text-gray-600">Wählen Sie die zu konvertierenden Tabellen</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-emerald-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3">
+                            <span class="text-2xl font-bold text-emerald-600">3</span>
+                        </div>
+                        <h4 class="font-semibold mb-2">Download</h4>
+                        <p class="text-sm text-gray-600">Laden Sie die konvertierten Dateien herunter</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer footer-center p-4 glass-card text-base-content mt-12">
+        <div>
+            <p>Copyright © 2024 - Access Database Converter v2.0</p>
+        </div>
+    </footer>
+
+    <script>
+        function uploadCtl() {
+            return {
+                // State
+                dragging: false,
+                file: null,
+                error: null,
+                success: null,
+                uploading: false,
+                progress: 0,
+                
+                // Configuration (from data attributes)
+                maxSizeMB: 100,
+                allowedExt: ['.mdb', '.accdb'],
+                
+                // Initialize
+                init() {
+                    // Get config from data attributes
+                    const container = this.$el.closest('[data-max-mb]');
+                    if (container) {
+                        this.maxSizeMB = parseInt(container.dataset.maxMb) || 100;
+                        this.allowedExt = container.dataset.allowedExt?.split(',') || ['.mdb', '.accdb'];
+                    }
+                },
+                
+                // Event handlers
+                onClick() {
+                    if (this.$refs.fileInput) {
+                        this.$refs.fileInput.click();
+                    }
+                },
+                
+                onKey(event) {
+                    // Handle keyboard interaction (Enter/Space)
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        this.onClick();
+                    }
+                },
+                
+                onDragOver() {
+                    this.dragging = true;
+                },
+                
+                onDragLeave() {
+                    this.dragging = false;
+                },
+                
+                onDrop(event) {
+                    this.dragging = false;
+                    const files = event.dataTransfer.files;
+                    
+                    if (files.length > 1) {
+                        this.error = `Nur eine Datei erlaubt. Die erste Datei (${files[0].name}) wurde ausgewählt.`;
+                        this.validate(files[0]);
+                    } else if (files.length === 1) {
+                        this.validate(files[0]);
+                    }
+                },
+                
+                onChange(event) {
+                    const files = event.target.files;
+                    if (files.length > 0) {
+                        this.validate(files[0]);
+                    }
+                },
+                
+                // Validation
+                validate(file) {
+                    this.error = null;
+                    this.success = null;
+                    
+                    // Check file type
+                    const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+                    if (!this.allowedExt.includes(fileExt)) {
+                        this.error = `Ungültiger Dateityp. Nur ${this.allowedExt.join(', ')} Dateien werden unterstützt.`;
+                        return false;
+                    }
+                    
+                    // Check file size
+                    const maxBytes = this.maxSizeMB * 1024 * 1024;
+                    if (file.size > maxBytes) {
+                        this.error = `Datei ist zu groß. Maximale Größe: ${this.maxSizeMB}MB`;
+                        return false;
+                    }
+                    
+                    // File is valid
+                    this.file = file;
+                    this.success = `Datei "${file.name}" (${this.formatFileSize(file.size)}) bereit zum Upload.`;
+                    return true;
+                },
+                
+                // Actions
+                reset() {
+                    this.file = null;
+                    this.error = null;
+                    this.success = null;
+                    this.progress = 0;
+                    if (this.$refs.fileInput) {
+                        this.$refs.fileInput.value = '';
+                    }
+                },
+                
+                async submit() {
+                    if (!this.file || this.uploading) return;
+                    
+                    this.uploading = true;
+                    this.progress = 0;
+                    this.error = null;
+                    this.success = null;
+                    
+                    try {
+                        const formData = new FormData();
+                        formData.append('file', this.file);
+                        
+                        // Create XHR for progress tracking
+                        const xhr = new XMLHttpRequest();
+                        
+                        // Promise wrapper for XHR
+                        const uploadPromise = new Promise((resolve, reject) => {
+                            xhr.upload.addEventListener('progress', (event) => {
+                                if (event.lengthComputable) {
+                                    this.progress = Math.round((event.loaded / event.total) * 100);
+                                }
+                            });
+                            
+                            xhr.addEventListener('load', () => {
+                                if (xhr.status >= 200 && xhr.status < 300) {
+                                    try {
+                                        const response = JSON.parse(xhr.responseText);
+                                        resolve(response);
+                                    } catch (e) {
+                                        reject(new Error('Invalid JSON response'));
+                                    }
+                                } else {
+                                    try {
+                                        const errorData = JSON.parse(xhr.responseText);
+                                        reject(new Error(errorData.detail || `HTTP ${xhr.status}: ${xhr.statusText}`));
+                                    } catch (e) {
+                                        reject(new Error(`HTTP ${xhr.status}: ${xhr.statusText}`));
+                                    }
+                                }
+                            });
+                            
+                            xhr.addEventListener('error', () => {
+                                reject(new Error('Netzwerkfehler beim Upload'));
+                            });
+                            
+                            xhr.addEventListener('timeout', () => {
+                                reject(new Error('Upload-Timeout erreicht'));
+                            });
+                        });
+                        
+                        // Start upload
+                        xhr.open('POST', '/upload');
+                        xhr.timeout = 5 * 60 * 1000; // 5 minutes timeout
+                        xhr.send(formData);
+                        
+                        // Wait for completion
+                        const result = await uploadPromise;
+                        
+                        this.progress = 100;
+                        this.success = 'Upload erfolgreich! Weiterleitung zur Tabellenauswahl...';
+                        
+                        // Redirect to tables page
+                        setTimeout(() => {
+                            window.location.href = `/tables/${result.job_id}/page`;
+                        }, 1500);
+                        
+                    } catch (err) {
+                        this.error = err.message || 'Upload fehlgeschlagen';
+                        console.error('Upload error:', err);
+                    } finally {
+                        this.uploading = false;
+                    }
+                },
+                
+                // Utilities
+                formatFileSize(bytes) {
+                    if (!bytes) return '0 Bytes';
+                    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+                    const size = (bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1);
+                    return `${size} ${sizes[i]}`;
+                }
+            };
+        }
+    </script>
+</body>
+</html>

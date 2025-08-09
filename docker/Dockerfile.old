@@ -1,0 +1,62 @@
+# Multi-stage build for Access Database Converter
+FROM python:3.11-slim AS base
+
+# Install system dependencies including OpenJDK 17
+RUN apt-get update && apt-get install -y \
+    wget \
+    unzip \
+    openjdk-17-jdk \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set JAVA_HOME
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV PATH="$JAVA_HOME/bin:$PATH"
+
+# Create app directory
+WORKDIR /app
+
+# Download and setup UCanAccess and dependencies
+RUN mkdir -p /app/lib && \
+    cd /app/lib && \
+    # Try multiple sources for UCanAccess
+    (wget --timeout=30 --tries=2 "https://sourceforge.net/projects/ucanaccess/files/latest/download" -O ucanaccess.zip && \
+     unzip -j ucanaccess.zip "*.jar" 2>/dev/null || \
+     wget --timeout=30 --tries=2 "https://repo1.maven.org/maven2/net/sf/ucanaccess/ucanaccess/5.0.1/ucanaccess-5.0.1.jar" || \
+     echo "Warning: UCanAccess download failed, trying alternative approach") && \
+    rm -f ucanaccess.zip && \
+    # Download Maven dependencies
+    wget --timeout=30 --tries=3 "https://repo1.maven.org/maven2/commons-logging/commons-logging/1.2/commons-logging-1.2.jar" && \
+    wget --timeout=30 --tries=3 "https://repo1.maven.org/maven2/commons-lang/commons-lang/2.6/commons-lang-2.6.jar" && \
+    wget --timeout=30 --tries=3 "https://repo1.maven.org/maven2/org/hsqldb/hsqldb/2.7.1/hsqldb-2.7.1.jar" && \
+    wget --timeout=30 --tries=3 "https://repo1.maven.org/maven2/com/healthmarketscience/jackcess/jackcess/4.0.4/jackcess-4.0.4.jar" && \
+    wget --timeout=30 --tries=3 "https://repo1.maven.org/maven2/com/healthmarketscience/jackcess/jackcess-encrypt/4.0.2/jackcess-encrypt-4.0.2.jar" && \
+    # Alternative: Download a working UCanAccess from GitHub releases if needed
+    (ls ucanaccess*.jar || wget --timeout=30 --tries=2 "https://github.com/tuhrig/ucanaccess/releases/download/v5.0.1/ucanaccess-5.0.1.jar" || true) && \
+    ls -la /app/lib/ && \
+    echo "JAR files prepared for UCanAccess"
+
+# Set Java classpath for UCanAccess
+ENV CLASSPATH="/app/lib/ucanaccess-5.0.1.jar:/app/lib/commons-logging-1.2.jar:/app/lib/commons-lang-2.6.jar:/app/lib/hsqldb-2.7.1.jar:/app/lib/jackcess-4.0.4.jar:/app/lib/jackcess-encrypt-4.0.2.jar:/app/lib/*.jar"
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY app/ ./app/
+
+# Create necessary directories
+RUN mkdir -p /app/uploads /app/exports /app/logs
+
+# Set permissions
+RUN chmod +x /app/app/main.py
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run the application
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

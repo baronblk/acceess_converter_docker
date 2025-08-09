@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="emerald">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tabellen auswählen - Access Database Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .table-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .table-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .table-card.selected {
+            border-color: #10b981;
+            background-color: rgba(16, 185, 129, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">
+    <!-- Navigation -->
+    <nav class="navbar glass-card shadow-lg mb-8">
+        <div class="navbar-start">
+            <div class="text-xl font-bold text-emerald-700">
+                <i class="fas fa-database mr-2"></i>
+                Access Converter
+            </div>
+        </div>
+        <div class="navbar-end">
+            <div class="badge badge-emerald">v2.0</div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-8 max-w-6xl" x-data="tableSelector('{{ job_id }}')">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-4">
+                <span class="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                    Tabellen auswählen
+                </span>
+            </h1>
+            <p class="text-lg text-gray-600">
+                Wählen Sie die Tabellen aus, die Sie konvertieren möchten
+            </p>
+            {% if job %}
+            <div class="mt-4">
+                <div class="badge badge-outline badge-lg">
+                    <i class="fas fa-file-database mr-2"></i>
+                    {{ job.original_filename }}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Loading State -->
+        <div x-show="loading" class="text-center py-12">
+            <div class="loading loading-spinner loading-lg text-emerald-500"></div>
+            <p class="mt-4 text-gray-600">Lade Tabellen...</p>
+        </div>
+
+        <!-- Error State -->
+        <div x-show="error" class="alert alert-error mb-8">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span x-text="error"></span>
+            <button @click="loadTables()" class="btn btn-ghost btn-sm">
+                <i class="fas fa-redo mr-1"></i>
+                Erneut versuchen
+            </button>
+        </div>
+
+        <!-- Tables Content -->
+        <div x-show="!loading && !error && tables.length > 0">
+            <!-- Controls -->
+            <div class="card glass-card shadow-lg mb-8">
+                <div class="card-body">
+                    <div class="flex flex-wrap items-center justify-between gap-4">
+                        <!-- Selection Controls -->
+                        <div class="flex gap-2">
+                            <button @click="selectAll()" class="btn btn-sm btn-outline btn-primary">
+                                <i class="fas fa-check-double mr-1"></i>
+                                Alle auswählen
+                            </button>
+                            <button @click="deselectAll()" class="btn btn-sm btn-outline">
+                                <i class="fas fa-times mr-1"></i>
+                                Alle abwählen
+                            </button>
+                        </div>
+
+                        <!-- Format Selection -->
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text font-medium">Export-Format:</span>
+                            </label>
+                            <select x-model="selectedFormat" class="select select-bordered select-sm w-full max-w-xs">
+                                <option value="csv">CSV (Comma Separated)</option>
+                                <option value="xlsx">Excel (XLSX)</option>
+                                <option value="json">JSON (JavaScript Object)</option>
+                                <option value="pdf">PDF (Portable Document)</option>
+                            </select>
+                        </div>
+
+                        <!-- Selected Count -->
+                        <div class="text-right">
+                            <div class="stat">
+                                <div class="stat-value text-2xl text-emerald-600" x-text="selectedTables.length"></div>
+                                <div class="stat-desc">von <span x-text="tables.length"></span> ausgewählt</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tables Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <template x-for="table in tables" :key="table.name">
+                    <div class="table-card card glass-card shadow-lg border-2 border-transparent"
+                         :class="{ 'selected': selectedTables.includes(table.name) }"
+                         @click="toggleTable(table.name)">
+                        <div class="card-body">
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1">
+                                    <h3 class="card-title text-lg">
+                                        <i class="fas fa-table text-emerald-500 mr-2"></i>
+                                        <span x-text="table.name"></span>
+                                    </h3>
+                                    <div class="flex gap-4 mt-2 text-sm text-gray-600">
+                                        <span x-show="table.row_count !== null">
+                                            <i class="fas fa-list-ol mr-1"></i>
+                                            <span x-text="table.row_count"></span> Zeilen
+                                        </span>
+                                        <span x-show="table.column_count !== null">
+                                            <i class="fas fa-columns mr-1"></i>
+                                            <span x-text="table.column_count"></span> Spalten
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="checkbox-wrapper">
+                                    <input type="checkbox" 
+                                           :checked="selectedTables.includes(table.name)"
+                                           @click.stop="toggleTable(table.name)"
+                                           class="checkbox checkbox-primary">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="card glass-card shadow-lg">
+                <div class="card-body">
+                    <div class="flex flex-wrap items-center justify-between gap-4">
+                        <a href="/" class="btn btn-outline">
+                            <i class="fas fa-arrow-left mr-2"></i>
+                            Neue Datei hochladen
+                        </a>
+                        
+                        <div class="flex gap-4">
+                            <button @click="startConversion()" 
+                                    :disabled="selectedTables.length === 0 || converting"
+                                    class="btn btn-primary btn-lg px-8"
+                                    :class="{ 'loading': converting }">
+                                <i class="fas fa-play mr-2" x-show="!converting"></i>
+                                <span x-text="converting ? 'Konvertierung läuft...' : 'Konvertierung starten'"></span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div x-show="selectedTables.length === 0" class="mt-4">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>Bitte wählen Sie mindestens eine Tabelle für die Konvertierung aus.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- No Tables Found -->
+        <div x-show="!loading && !error && tables.length === 0" class="text-center py-12">
+            <i class="fas fa-table text-6xl text-gray-400 mb-4"></i>
+            <h3 class="text-2xl font-bold text-gray-600 mb-2">Keine Tabellen gefunden</h3>
+            <p class="text-gray-500 mb-6">Die Datenbank enthält keine lesbaren Tabellen.</p>
+            <a href="/" class="btn btn-primary">
+                <i class="fas fa-upload mr-2"></i>
+                Andere Datei hochladen
+            </a>
+        </div>
+
+        <!-- Progress Modal -->
+        <div x-show="showProgress" class="modal modal-open">
+            <div class="modal-box">
+                <h3 class="font-bold text-lg text-center mb-4">
+                    <i class="fas fa-cogs text-emerald-500 mr-2"></i>
+                    Konvertierung läuft
+                </h3>
+                
+                <div class="text-center mb-6">
+                    <div class="radial-progress text-emerald-500 mb-4" 
+                         :style="`--value:${progress}; --size:6rem;`">
+                        <span x-text="progress + '%'"></span>
+                    </div>
+                    <p class="text-gray-600" x-text="progressMessage"></p>
+                </div>
+
+                <div class="mb-4">
+                    <div class="flex justify-between text-sm text-gray-600 mb-1">
+                        <span>Fortschritt</span>
+                        <span x-text="progress + '%'"></span>
+                    </div>
+                    <progress class="progress progress-primary w-full" 
+                              :value="progress" 
+                              max="100"></progress>
+                </div>
+
+                <div x-show="progress === 100" class="text-center">
+                    <button @click="downloadResults()" class="btn btn-success btn-lg">
+                        <i class="fas fa-download mr-2"></i>
+                        Ergebnisse herunterladen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer footer-center p-4 glass-card text-base-content mt-12">
+        <div>
+            <p>Copyright © 2024 - Access Database Converter v2.0</p>
+        </div>
+    </footer>
+
+    <script>
+        function tableSelector(jobId) {
+            return {
+                jobId: jobId,
+                tables: [],
+                selectedTables: [],
+                selectedFormat: 'csv',
+                loading: true,
+                error: null,
+                converting: false,
+                showProgress: false,
+                progress: 0,
+                progressMessage: '',
+                pollingInterval: null,
+
+                async init() {
+                    await this.loadTables();
+                },
+
+                async loadTables() {
+                    this.loading = true;
+                    this.error = null;
+
+                    try {
+                        const response = await fetch(`/tables/${this.jobId}`);
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.tables = data.tables.map(name => ({
+                                name: name,
+                                row_count: null,
+                                column_count: null
+                            }));
+                        } else {
+                            const errorData = await response.json();
+                            this.error = errorData.detail || 'Fehler beim Laden der Tabellen';
+                        }
+                    } catch (err) {
+                        this.error = 'Netzwerkfehler beim Laden der Tabellen';
+                        console.error('Load tables error:', err);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                toggleTable(tableName) {
+                    const index = this.selectedTables.indexOf(tableName);
+                    if (index > -1) {
+                        this.selectedTables.splice(index, 1);
+                    } else {
+                        this.selectedTables.push(tableName);
+                    }
+                },
+
+                selectAll() {
+                    this.selectedTables = this.tables.map(table => table.name);
+                },
+
+                deselectAll() {
+                    this.selectedTables = [];
+                },
+
+                async startConversion() {
+                    if (this.selectedTables.length === 0) return;
+
+                    this.converting = true;
+
+                    try {
+                        const response = await fetch(`/convert/${this.jobId}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                selected_tables: this.selectedTables,
+                                export_format: this.selectedFormat
+                            })
+                        });
+
+                        if (response.ok) {
+                            this.showProgress = true;
+                            this.startProgressPolling();
+                        } else {
+                            const errorData = await response.json();
+                            this.error = errorData.detail || 'Konvertierung fehlgeschlagen';
+                        }
+                    } catch (err) {
+                        this.error = 'Netzwerkfehler bei der Konvertierung';
+                        console.error('Conversion error:', err);
+                    } finally {
+                        this.converting = false;
+                    }
+                },
+
+                startProgressPolling() {
+                    this.pollingInterval = setInterval(async () => {
+                        try {
+                            const response = await fetch(`/status/${this.jobId}`);
+                            if (response.ok) {
+                                const status = await response.json();
+                                this.progress = status.progress;
+                                this.progressMessage = status.message;
+
+                                if (status.status === 'completed') {
+                                    clearInterval(this.pollingInterval);
+                                } else if (status.status === 'failed') {
+                                    clearInterval(this.pollingInterval);
+                                    this.error = status.message;
+                                    this.showProgress = false;
+                                }
+                            }
+                        } catch (err) {
+                            console.error('Status polling error:', err);
+                        }
+                    }, 1000);
+                },
+
+                async downloadResults() {
+                    try {
+                        const response = await fetch(`/download/${this.jobId}`);
+                        if (response.ok) {
+                            const blob = await response.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.style.display = 'none';
+                            a.href = url;
+                            a.download = `database_export_${this.selectedFormat}.zip`;
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+                            
+                            // Close modal and show success
+                            this.showProgress = false;
+                            setTimeout(() => {
+                                window.location.href = '/';
+                            }, 2000);
+                        } else {
+                            this.error = 'Download fehlgeschlagen';
+                        }
+                    } catch (err) {
+                        this.error = 'Netzwerkfehler beim Download';
+                        console.error('Download error:', err);
+                    }
+                }
+            };
+        }
+    </script>
+</body>
+</html>

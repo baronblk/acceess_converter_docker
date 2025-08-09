@@ -1,153 +1,280 @@
-# Access Database Converter
+# Access Database Converter v2.0
 
-Eine professionelle Webanwendung zur Konvertierung von Microsoft Access-Datenbanken (.accdb/.mdb) in verschiedene Formate (CSV, XLSX, JSON, PDF) mit Browser-basierter Benutzeroberfläche.
+Ein moderner, containerisierter Service zur Konvertierung von Microsoft Access-Datenbanken (.mdb/.accdb) in verschiedene Formate (CSV, Excel, JSON, PDF) - ohne Windows-Abhängigkeiten.
 
-## 🏗️ Architektur
+## Features
 
-### Backend
-- **Python 3.11** mit **FastAPI**
-- **UCanAccess** (JDBC) via jaydebeapi + OpenJDK 17 für Access-DB-Zugriff unter Linux
-- **RQ (Redis Queue)** für asynchrone Job-Verarbeitung
-- **Redis** als Message Broker und Cache
-- Strukturierte Logs mit Request-IDs und Job-IDs
+- 🚀 **Single-Container-Architektur** - Einfaches Deployment ohne komplexe Abhängigkeiten
+- 📊 **Multi-Format-Export** - CSV, Excel (XLSX), JSON, und PDF Unterstützung
+- 🎨 **Moderne Web-UI** - Responsive Design mit Tailwind CSS und daisyUI
+- ⚡ **Threading-basierte Jobs** - Parallele Verarbeitung mit ThreadPoolExecutor
+- 🔒 **Sichere Uploads** - Validierung und Größenbeschränkungen
+- 📁 **Batch-Download** - Alle Exports als ZIP-Archiv
+- 🐳 **Docker-Ready** - Komplette Containerisierung mit Java/Python Integration
 
-### Frontend
-- **React** mit **Vite** Build-System
-- **Tailwind CSS** für professionelles Styling
-- Drag & Drop Upload-Interface
-- Echtzeit-Fortschrittsanzeige
-- Job-Historie und Log-Viewer
+## Technologie-Stack
 
-### Deployment
-- **Docker** mit docker-compose
-- **Linux-kompatibel** (kein Windows erforderlich)
-- **nginx** als Reverse Proxy für Frontend
+- **Backend**: FastAPI (Python 3.11) + UCanAccess (Java JDBC)
+- **Frontend**: Jinja2 Templates + Tailwind CSS + Alpine.js
+- **Database**: UCanAccess für .mdb/.accdb Dateien
+- **Export**: pandas, openpyxl, reportlab
+- **Container**: Docker mit OpenJDK 17 + Python 3.11
 
-## 🚀 Features
+## Quick Start
 
-### Core Features
-- ✅ Upload von .accdb/.mdb Dateien (Drag & Drop)
-- ✅ Automatische Erkennung und Auflistung aller Tabellen
-- ✅ Auswahl von Zieltabellen (alle oder Teilmenge)
-- ✅ Export in mehrere Formate:
-  - **CSV** (UTF-8 BOM, Separator ";")
-  - **XLSX** (eine Datei pro Tabelle)
-  - **JSON** (orient="records")
-  - **PDF** (einfache Tabellendarstellung)
-- ✅ Echtzeit-Fortschrittsanzeige
-- ✅ Download einzelner Dateien oder ZIP-Gesamtpaket
-- ✅ Job-Historie mit Status und Fehleranzeige
-- ✅ Automatisches Aufräumen alter Uploads/Exports
-
-### Security & Robustheit
-- Konfigurierbare max. Upload-Größe (Standard: 200 MB)
-- Dateifilter auf .accdb/.mdb Endungen
-- Sichere Pfadbehandlung mit pathlib
-- Zeitlimits pro Job
-- Keine Makro-Ausführung, nur Tabellen-Lesen
-- Saubere Fehlerbehandlung pro Tabelle
-
-## 📡 API Endpunkte
-
-```
-POST /api/upload                     → Datei hochladen, ID zurückgeben
-GET  /api/tables?file_id=...         → Tabellen/Views auflisten
-POST /api/jobs                       → Job starten
-GET  /api/jobs/{job_id}              → Job-Status + Fortschritt
-GET  /api/jobs/{job_id}/download     → ZIP aller Ergebnisse
-GET  /api/logs/{job_id}              → Protokollauszug
-WS   /api/jobs/{job_id}/ws           → Live-Fortschritt (WebSocket)
-```
-
-## 🐳 Docker Setup
+### Mit Docker
 
 ```bash
-# Projekt klonen
-git clone https://github.com/baronblk/acceess_converter_docker.git
+# Repository klonen
+git clone <your-repo-url>
 cd access_converter_docker
 
-# Starten mit docker-compose
-docker-compose up --build
+# Container bauen und starten
+make build
+make run
 
-# App verfügbar unter:
-http://localhost:8080
+# Oder direkt mit Docker
+docker build -f docker/Dockerfile -t access-converter .
+docker run -p 8000:8000 access-converter
 ```
 
-## 🔧 Entwicklung
+### Ohne Docker (Entwicklung)
 
-### Backend (Python/FastAPI)
 ```bash
-cd backend
+# Virtual Environment erstellen
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# oder
+venv\Scripts\activate     # Windows
+
+# Dependencies installieren
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Java installieren (OpenJDK 17+)
+# UCanAccess JARs herunterladen (siehe Dockerfile)
+
+# Anwendung starten
+cd app
+python main.py
 ```
 
-### Frontend (React/Vite)
-```bash
-cd frontend
-npm install
-npm run dev
+## Verwendung
+
+1. **Öffnen Sie** http://localhost:8000 in Ihrem Browser
+2. **Laden Sie** Ihre .mdb oder .accdb Datei hoch (max. 100MB)
+3. **Wählen Sie** die gewünschten Tabellen aus
+4. **Bestimmen Sie** das Export-Format (CSV/Excel/JSON/PDF)
+5. **Downloaden Sie** die konvertierten Dateien als ZIP-Archiv
+
+## API Endpoints
+
+| Endpoint | Methode | Beschreibung |
+|----------|---------|--------------|
+| `/` | GET | Upload-Interface |
+| `/upload` | POST | Datei hochladen |
+| `/tables/{job_id}` | GET | Tabellen auflisten |
+| `/tables/{job_id}/page` | GET | Tabellen-Auswahl-Interface |
+| `/convert/{job_id}` | POST | Konvertierung starten |
+| `/status/{job_id}` | GET | Job-Status abfragen |
+| `/download/{job_id}` | GET | Ergebnisse downloaden |
+| `/health` | GET | Health Check |
+
+## Konfiguration
+
+Umgebungsvariablen können in `.env` gesetzt werden:
+
+```env
+# Upload-Einstellungen
+MAX_UPLOAD_SIZE=104857600  # 100MB
+UPLOAD_DIR=/app/uploads
+EXPORT_DIR=/app/exports
+
+# Job-Einstellungen
+MAX_CONCURRENT_JOBS=3
+JOB_TIMEOUT_MINUTES=30
+
+# Logging
+LOG_LEVEL=INFO
+LOG_FILE=/app/logs/app.log
 ```
 
-### Worker (RQ)
-```bash
-cd backend
-python -m rq worker --url redis://localhost:6379/0
-```
+## Entwicklung
 
-## 📁 Projektstruktur
+### Projektstruktur
 
 ```
 access_converter_docker/
-├── backend/
-│   ├── app/
-│   │   ├── api/          # FastAPI Router & Endpunkte
-│   │   ├── core/         # Konfiguration & Logging
-│   │   ├── services/     # Business Logic (UCanAccess, Export, Jobs)
-│   │   ├── models.py     # Pydantic Schemas
-│   │   ├── utils.py      # Hilfsfunktionen
-│   │   └── main.py       # FastAPI App
-│   ├── requirements.txt
-│   └── Dockerfile
-├── frontend/
-│   ├── src/
-│   ├── package.json
-│   └── Dockerfile
-├── ucanaccess/           # UCanAccess JAR-Dateien
-├── data/
-│   ├── uploads/          # Temporäre Upload-Dateien
-│   ├── exports/          # Exportierte Dateien
-│   └── logs/             # Anwendungsprotokoll
-├── docker-compose.yml
-└── README.md
+├── docker/
+│   └── Dockerfile              # Multi-stage Docker build
+├── app/
+│   ├── main.py                 # FastAPI application
+│   ├── jobs.py                 # Job management
+│   ├── models.py               # Pydantic models
+│   ├── core/
+│   │   ├── config.py           # Configuration
+│   │   └── logging.py          # Logging setup
+│   ├── services/
+│   │   ├── ucan.py             # UCanAccess integration
+│   │   └── export.py           # Export services
+│   └── templates/
+│       ├── index.html          # Upload interface
+│       └── tables.html         # Table selection
+├── requirements.txt            # Python dependencies
+├── .env.example               # Environment template
+├── Makefile                   # Build/run commands
+└── README.md                  # This file
 ```
 
-## ⚙️ Umgebungsvariablen
+### Lokale Entwicklung
 
-```env
-APP_ENV=prod
-MAX_UPLOAD_MB=200
-CLEANUP_AFTER_HOURS=24
-REDIS_URL=redis://redis:6379/0
-UCANACCESS_PATH=/opt/ucanaccess
+```bash
+# Development server mit Auto-Reload
+make dev
+
+# Tests ausführen
+make test
+
+# Logs anzeigen
+make logs
+
+# Container cleanup
+make clean
 ```
 
-## 🎯 Roadmap
+### UCanAccess Integration
 
-- [x] Projektinitialisierung & Grundstruktur
-- [ ] Backend: Upload & Tabellen-Auflistung
-- [ ] Backend: Job-System mit RQ
-- [ ] Backend: Export-Funktionen (CSV, XLSX, JSON, PDF)
-- [ ] Frontend: Upload-Interface
-- [ ] Frontend: Tabellen-Auswahl & Job-Management
-- [ ] Frontend: Fortschrittsanzeige & Downloads
-- [ ] Docker-Setup & Deployment
-- [ ] Tests & Dokumentation
+Die Anwendung verwendet UCanAccess für den direkten Zugriff auf Access-Datenbanken:
 
-## 📄 Lizenz
+- **Java Integration**: JPype1 für Python-Java Bridge
+- **JDBC Driver**: UCanAccess 5.0.1 mit allen Abhängigkeiten
+- **Memory Management**: Optimierte JVM-Einstellungen
+- **Thread Safety**: Single-threaded JDBC operations
 
-MIT License
+## Deployment
 
-## 🤝 Beitragen
+### Produktions-Deployment
 
-Contributions sind willkommen! Bitte erstelle ein Issue oder Pull Request.
+```bash
+# Production build
+docker build -f docker/Dockerfile -t access-converter:prod .
+
+# Mit docker-compose
+version: '3.8'
+services:
+  access-converter:
+    image: access-converter:prod
+    ports:
+      - "8000:8000"
+    environment:
+      - LOG_LEVEL=WARNING
+      - MAX_CONCURRENT_JOBS=5
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    restart: unless-stopped
+```
+
+### Kubernetes
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: access-converter
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: access-converter
+  template:
+    metadata:
+      labels:
+        app: access-converter
+    spec:
+      containers:
+      - name: access-converter
+        image: access-converter:prod
+        ports:
+        - containerPort: 8000
+        env:
+        - name: MAX_CONCURRENT_JOBS
+          value: "3"
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+```
+
+## Troubleshooting
+
+### Häufige Probleme
+
+**UCanAccess ClassNotFound:**
+```bash
+# Prüfen Sie die Java-Classpath
+echo $CLASSPATH
+# Stelle sicher, dass alle JAR-Dateien vorhanden sind
+ls -la /app/lib/
+```
+
+**Upload-Fehler:**
+```bash
+# Prüfen Sie Dateiberechtigungen
+chmod 755 /app/uploads
+# Prüfen Sie Festplattenspeicher
+df -h
+```
+
+**Memory-Probleme:**
+```bash
+# Erhöhen Sie Java Heap Size
+export JAVA_HEAP_SIZE=2048m
+# Oder in der .env Datei
+echo "JAVA_HEAP_SIZE=2048m" >> .env
+```
+
+### Logs
+
+```bash
+# Application logs
+docker logs <container-id>
+
+# File logs
+tail -f /app/logs/app.log
+
+# Java/JVM logs
+# JVM logs werden in den Application logs ausgegeben
+```
+
+## Sicherheit
+
+- **File Validation**: Nur .mdb/.accdb Dateien erlaubt
+- **Size Limits**: Standard 100MB Upload-Limit
+- **Path Sanitization**: Sichere Dateinamen und Pfade
+- **Temporary Files**: Automatisches Cleanup nach Job-Completion
+- **No External Dependencies**: Alle Libraries in Container eingebettet
+
+## Performance
+
+- **Concurrent Jobs**: Standard 3 parallele Konvertierungen
+- **Memory Management**: Optimierte JVM-Settings für UCanAccess
+- **File Streaming**: Efficient file handling für große Datenbanken
+- **Progress Tracking**: Real-time Status Updates
+
+## Lizenz
+
+MIT License - siehe LICENSE Datei für Details.
+
+## Support
+
+Für Fragen und Support:
+- Issue Tracker: GitHub Issues
+- Dokumentation: Siehe `/docs` Ordner
+- API Docs: http://localhost:8000/docs (FastAPI Swagger UI)
+
+---
+
+**Access Database Converter v2.0** - Entwickelt für moderne, containerisierte Umgebungen.
