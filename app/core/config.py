@@ -8,23 +8,28 @@ class Settings(BaseSettings):
     
     # Application settings
     APP_NAME: str = "Access Database Converter"
-    APP_VERSION: str = "2.0.0"
+    APP_VERSION: str = "2.2.0"
     DEBUG: bool = False
     
-    # File upload settings
-    MAX_UPLOAD_SIZE: int = 100 * 1024 * 1024  # 100MB
+    # File upload settings - aus Umgebungsvariablen
+    MAX_UPLOAD_SIZE: int = 100 * 1024 * 1024  # Standard: 100MB, überschreibbar via ENV
     UPLOAD_DIR: str = "/app/data/uploads"
     EXPORT_DIR: str = "/app/data/exports"
     
-    # Job settings
-    MAX_CONCURRENT_JOBS: int = 3
+    # Job settings - aus Umgebungsvariablen
+    MAX_CONCURRENT_JOBS: int = 3  # Überschreibbar via ENV
     JOB_TIMEOUT_MINUTES: int = 30
     CLEANUP_INTERVAL_HOURS: int = 1
     MAX_JOB_AGE_HOURS: int = 24
     
+    # Erweiterte Konfiguration - neue ENV-Variablen
+    MAX_TABLES_PER_DB: int = 100
+    TEMP_DIR_SIZE_LIMIT: int = 1024 * 1024 * 1024  # 1GB
+    WORKER_TIMEOUT: int = 300  # 5 Minuten
+    CLEANUP_INTERVAL_MINUTES: int = 60  # Bereinigung in Minuten
+    
     # Cleanup settings
     CLEANUP_AFTER_HOURS: int = 24  # Delete files older than X hours
-    CLEANUP_INTERVAL_MIN: int = 60  # How often cleanup runs (minutes)
     LOGS_DIR: str = "/app/logs"
     
     # Database settings

@@ -68,7 +68,7 @@
         <!-- Upload Card -->
         <div class="card glass-card shadow-xl mb-8" 
              x-data="uploadCtl()" 
-             data-max-mb="100"
+             data-max-mb="{{ max_upload_mb }}"
              data-allowed-ext=".mdb,.accdb">
             <div class="card-body">
                 <h2 class="card-title text-2xl text-emerald-700 mb-6">
@@ -274,15 +274,26 @@
                 progress: 0,
                 
                 // Configuration (from data attributes)
-                maxSizeMB: 100,
+                maxSizeMB: 100,  // Wird über API aktualisiert
                 allowedExt: ['.mdb', '.accdb'],
                 
                 // Initialize
-                init() {
-                    // Get config from data attributes
+                async init() {
+                    // Get configuration from API
+                    try {
+                        const response = await fetch('/api/config');
+                        if (response.ok) {
+                            const config = await response.json();
+                            this.maxSizeMB = config.max_upload_mb;
+                        }
+                    } catch (error) {
+                        console.log('Using default config:', error);
+                    }
+                    
+                    // Also get config from data attributes (fallback)
                     const container = this.$el.closest('[data-max-mb]');
                     if (container) {
-                        this.maxSizeMB = parseInt(container.dataset.maxMb) || 100;
+                        this.maxSizeMB = parseInt(container.dataset.maxMb) || this.maxSizeMB;
                         this.allowedExt = container.dataset.allowedExt?.split(',') || ['.mdb', '.accdb'];
                     }
                 },

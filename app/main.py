@@ -156,13 +156,33 @@ start_periodic_cleanup()
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Home page with upload interface"""
-    return templates.TemplateResponse("index.html", {"request": request})
+    # Berechne die maximale Upload-Größe in MB für das Frontend
+    max_upload_mb = settings.MAX_UPLOAD_SIZE // (1024 * 1024)
+    
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "max_upload_mb": max_upload_mb,
+        "app_version": settings.APP_VERSION
+    })
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+
+@app.get("/api/config")
+async def get_config():
+    """API endpoint für Frontend-Konfiguration"""
+    return {
+        "max_upload_mb": settings.MAX_UPLOAD_SIZE // (1024 * 1024),
+        "max_upload_size": settings.MAX_UPLOAD_SIZE,
+        "max_concurrent_jobs": settings.MAX_CONCURRENT_JOBS,
+        "max_tables_per_db": settings.MAX_TABLES_PER_DB,
+        "app_version": settings.APP_VERSION,
+        "allowed_extensions": settings.ALLOWED_EXTENSIONS
+    }
 
 
 @app.get("/diagnostics/cleanup")
@@ -355,6 +375,18 @@ async def upload_database(file: UploadFile = File(...)):
                 detail="Invalid file type. Only .mdb and .accdb files are supported."
             )
         
+        # Validate file size
+        content = await file.read()
+        file_size = len(content)
+        
+        if file_size > settings.MAX_UPLOAD_SIZE:
+            max_mb = settings.MAX_UPLOAD_SIZE // (1024 * 1024)
+            actual_mb = file_size / (1024 * 1024)
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum size: {max_mb}MB, actual size: {actual_mb:.1f}MB"
+            )
+        
         # Generate unique job ID
         job_id = str(uuid.uuid4())
         
@@ -362,7 +394,6 @@ async def upload_database(file: UploadFile = File(...)):
         file_path = os.path.join(settings.UPLOAD_DIR, f"{job_id}_{file.filename}")
         
         async with aiofiles.open(file_path, 'wb') as f:
-            content = await file.read()
             await f.write(content)
         
         # Create job with normalized path
