@@ -80,7 +80,33 @@ docker run --rm -d -p 8100:8000 --name access-converter access-converter:v2.2-pr
 ### 4. Anwendung öffnen
 Öffnen Sie Ihren Browser und navigieren Sie zu: `http://localhost:8100`
 
-## 📋 Verwendung
+## � Portainer / NAS Deployment
+
+### Ugreen NAS / Portainer Stack
+Für Portainer-basierte Deployments (ideal für Ugreen NAS):
+
+1. **Portainer Stack verwenden**: 
+   - Nutzen Sie die bereitgestellte `portainer-stack.yml`
+   - Detaillierte Anleitung in `PORTAINER-SETUP.md`
+
+2. **Quick Deploy**:
+   ```yaml
+   # In Portainer: Stacks → Add stack → Web editor
+   # Kopieren Sie den Inhalt aus portainer-stack.yml
+   ```
+
+3. **NAS-Zugriff**: `http://NAS-IP:8080`
+
+**Features für NAS-Umgebungen:**
+- ✅ Persistente Docker Volumes
+- ✅ Automatische Restarts
+- ✅ Health Monitoring
+- ✅ Portainer-optimierte Labels
+- ✅ Production-ready Konfiguration
+
+Siehe **[PORTAINER-SETUP.md](PORTAINER-SETUP.md)** für die komplette Anleitung.
+
+## �📋 Verwendung
 
 1. **Access-Datei hochladen**: Ziehen Sie Ihre .accdb/.mdb Datei in den Upload-Bereich
 2. **Tabellen auswählen**: Wählen Sie die zu konvertierenden Tabellen aus
