@@ -1,4 +1,4 @@
-# Access Database Converter v2.0
+# Access Database Converter v2.2.1
 # Copyright © 2025 GCNG Software - Rene Süß
 #
 # Lizenziert unter der Business Source License 1.1
@@ -12,6 +12,21 @@
 
 # Multi-stage build for Access Database Converter
 FROM python:3.11-slim
+
+# Build arguments for versioning
+ARG VERSION=2.2.1
+ARG BUILD_DATE
+ARG VCS_REF
+
+# OCI Image Labels (https://github.com/opencontainers/image-spec)
+LABEL org.opencontainers.image.title="Access Database Converter" \
+      org.opencontainers.image.description="Convert Access databases (.mdb/.accdb) to CSV, XLSX, JSON, PDF" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.source="https://github.com/baronblk/acceess_converter_docker" \
+      org.opencontainers.image.vendor="GCNG Software - Rene Süß" \
+      org.opencontainers.image.licenses="BSL-1.1"
 
 # Install system dependencies (Java JRE + Tools)
 RUN apt-get update && apt-get install -y --no-install-recommends \
