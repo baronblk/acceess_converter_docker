@@ -20,7 +20,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: baronblk/access-converter
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push:
