@@ -13,10 +13,11 @@
 # Multi-stage build for Access Database Converter
 FROM python:3.11-slim
 
-# Build arguments for versioning
+# Build arguments for versioning and platform
 ARG VERSION=2.2.1
 ARG BUILD_DATE
 ARG VCS_REF
+ARG TARGETARCH
 
 # OCI Image Labels (https://github.com/opencontainers/image-spec)
 LABEL org.opencontainers.image.title="Access Database Converter" \
@@ -36,9 +37,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Set JAVA_HOME
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+# Set JAVA_HOME dynamically based on architecture
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-${TARGETARCH:-amd64}
 ENV PATH="$JAVA_HOME/bin:$PATH"
+
+# Ensure JAVA_HOME exists (fallback for different arch naming)
+RUN if [ ! -d "$JAVA_HOME" ]; then \
+      JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))); \
+      echo "JAVA_HOME=$JAVA_HOME" >> /etc/environment; \
+    fi
 
 # UCanAccess Version
 ARG UCANACCESS_VERSION=5.0.1
