@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     
     # Application settings
     APP_NAME: str = "Access Database Converter"
-    APP_VERSION: str = "2.2.0"
+    APP_VERSION: str = "2.2.1"
     DEBUG: bool = False
     
     # File upload settings - aus Umgebungsvariablen

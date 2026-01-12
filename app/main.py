@@ -124,34 +124,52 @@ cleanup_stop_event = threading.Event()
 
 def periodic_cleanup_worker():
     """Hintergrund-Worker für periodische Bereinigung"""
-    logger.info(f"Periodische Bereinigung gestartet (Intervall: {settings.CLEANUP_INTERVAL_MIN} Minuten)")
-    
-    while not cleanup_stop_event.is_set():
-        try:
-            # Cleanup alte Uploads
-            removed_uploads = cleanup_old_uploads(settings.CLEANUP_AFTER_HOURS)
-            
-            # Cleanup alte Logs  
-            removed_logs = cleanup_old_logs(settings.CLEANUP_AFTER_HOURS)
-            
-            if removed_uploads or removed_logs:
-                logger.info(f"Periodische Bereinigung abgeschlossen: "
-                          f"{len(removed_uploads)} Uploads, {len(removed_logs)} Logs entfernt")
-            
-        except Exception as e:
-            logger.error(f"Fehler bei periodischer Bereinigung: {e}")
+    try:
+        interval_minutes = settings.CLEANUP_INTERVAL_MINUTES
+        logger.info(f"Periodische Bereinigung gestartet (Intervall: {interval_minutes} Minuten)")
         
-        # Warten bis zum nächsten Cleanup oder Stop-Signal
-        cleanup_stop_event.wait(timeout=settings.CLEANUP_INTERVAL_MIN * 60)
-    
-    logger.info("Periodische Bereinigung beendet")
+        while not cleanup_stop_event.is_set():
+            try:
+                # Cleanup alte Uploads
+                removed_uploads = cleanup_old_uploads(settings.CLEANUP_AFTER_HOURS)
+                
+                # Cleanup alte Logs  
+                removed_logs = cleanup_old_logs(settings.CLEANUP_AFTER_HOURS)
+                
+                if removed_uploads or removed_logs:
+                    logger.info(f"Periodische Bereinigung abgeschlossen: "
+                              f"{len(removed_uploads)} Uploads, {len(removed_logs)} Logs entfernt")
+                
+            except Exception as e:
+                logger.error(f"Fehler bei periodischer Bereinigung: {e}", exc_info=True)
+            
+            # Warten bis zum nächsten Cleanup oder Stop-Signal
+            cleanup_stop_event.wait(timeout=interval_minutes * 60)
+        
+        logger.info("Periodische Bereinigung beendet")
+        
+    except Exception as e:
+        logger.critical(f"Kritischer Fehler im Cleanup-Thread - Thread wird beendet: {e}", exc_info=True)
 
 def start_periodic_cleanup():
     """Startet den periodischen Cleanup-Thread"""
     global cleanup_thread
+    
+    # Startup-Check: Validiere Cleanup-Konfiguration
+    try:
+        interval = settings.CLEANUP_INTERVAL_MINUTES
+        if not isinstance(interval, int) or interval < 1:
+            logger.error(f"Ungültige CLEANUP_INTERVAL_MINUTES: {interval} (muss >= 1 sein)")
+            return
+        logger.info(f"Cleanup-Konfiguration validiert: CLEANUP_INTERVAL_MINUTES={interval}, "
+                   f"CLEANUP_AFTER_HOURS={settings.CLEANUP_AFTER_HOURS}")
+    except AttributeError as e:
+        logger.error(f"Cleanup-Konfiguration fehlt: {e}")
+        return
+    
     if cleanup_thread is None or not cleanup_thread.is_alive():
         cleanup_stop_event.clear()
-        cleanup_thread = threading.Thread(target=periodic_cleanup_worker, daemon=True)
+        cleanup_thread = threading.Thread(target=periodic_cleanup_worker, daemon=True, name="PeriodicCleanupWorker")
         cleanup_thread.start()
         logger.info("Periodic cleanup thread gestartet")
 
