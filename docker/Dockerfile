@@ -30,22 +30,23 @@ LABEL org.opencontainers.image.title="Access Database Converter" \
       org.opencontainers.image.licenses="BSL-1.1"
 
 # Install system dependencies (Java JRE + Tools)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    openjdk-17-jre-headless \
-    curl \
-    unzip \
-    ca-certificates \
+# Retry logic for apt-get to handle transient network issues
+RUN set -eux; \
+    for i in 1 2 3; do \
+      apt-get update && break || sleep 5; \
+    done && \
+    apt-get install -y --no-install-recommends \
+      openjdk-17-jre-headless \
+      curl \
+      unzip \
+      ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Set JAVA_HOME dynamically based on architecture
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-${TARGETARCH:-amd64}
+# Set JAVA_HOME dynamically (works for both amd64 and arm64)
+RUN JAVA_HOME_PATH=$(dirname $(dirname $(readlink -f $(which java)))) && \
+    echo "JAVA_HOME=$JAVA_HOME_PATH" >> /etc/environment
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ENV PATH="$JAVA_HOME/bin:$PATH"
-
-# Ensure JAVA_HOME exists (fallback for different arch naming)
-RUN if [ ! -d "$JAVA_HOME" ]; then \
-      JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))); \
-      echo "JAVA_HOME=$JAVA_HOME" >> /etc/environment; \
-    fi
 
 # UCanAccess Version
 ARG UCANACCESS_VERSION=5.0.1
