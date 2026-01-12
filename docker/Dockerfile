@@ -30,11 +30,14 @@ LABEL org.opencontainers.image.title="Access Database Converter" \
       org.opencontainers.image.licenses="BSL-1.1"
 
 # Install system dependencies (Java JRE + Tools)
-# Retry logic for apt-get to handle transient network issues
+# Fix Debian repository configuration and install with retry
 RUN set -eux; \
-    for i in 1 2 3; do \
-      apt-get update && break || sleep 5; \
-    done && \
+    # Ensure proper sources.list for Debian Bookworm
+    echo "deb http://deb.debian.org/debian bookworm main" > /etc/apt/sources.list && \
+    echo "deb http://deb.debian.org/debian bookworm-updates main" >> /etc/apt/sources.list && \
+    echo "deb http://security.debian.org/debian-security bookworm-security main" >> /etc/apt/sources.list && \
+    # Update and install
+    apt-get update && \
     apt-get install -y --no-install-recommends \
       openjdk-17-jre-headless \
       curl \
